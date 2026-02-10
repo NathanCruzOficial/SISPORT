@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Identificação do Visitante</h1>
+
+<form method="post" action="{{ url_for('visitor.identify_post') }}" class="card">
+  <label>CPF</label>
+  <input name="cpf" required placeholder="000.000.000-00" />
+  <button type="submit">Continuar</button>
+</form>
+
+<p style="margin-top:12px;color:#374151;">
+  Se o CPF já estiver cadastrado, você registrará apenas a entrada no aquartelamento.
+  Se não estiver, o sistema abrirá o cadastro (3 etapas).
+</p>
+{% endblock %}

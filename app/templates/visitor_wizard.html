@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Novo Visitante (3 etapas)</h1>
+
+<div class="stepper">
+  <div class="step {% if wizard.step == 1 %}active{% endif %}">1. Identificação</div>
+  <div class="step {% if wizard.step == 2 %}active{% endif %}">2. Foto</div>
+  <div class="step {% if wizard.step == 3 %}active{% endif %}">3. Local</div>
+</div>
+
+{% if wizard.step == 1 %}
+<form method="post" action="{{ url_for('visitor.wizard_step1') }}" class="card">
+  <label>Nome completo</label>
+  <input name="name" required value="{{ wizard.name }}" />
+
+  <label>CPF</label>
+  <input name="cpf" required placeholder="000.000.000-00" value="{{ wizard.cpf }}" />
+
+  <button type="submit">Próximo</button>
+</form>
+{% endif %}
+
+{% if wizard.step == 2 %}
+<div class="card">
+  <p>Permita o acesso à câmera e capture a foto.</p>
+
+  <div class="camera">
+    <video id="video" autoplay playsinline></video>
+    <canvas id="canvas" style="display:none;"></canvas>
+    <img id="preview" alt="Prévia" />
+  </div>
+
+  <form method="post" action="{{ url_for('visitor.wizard_step2') }}">
+    <input type="hidden" name="photo_data_url" id="photo_data_url" />
+    <div class="row">
+      <button type="button" onclick="startCamera()">Ativar câmera</button>
+      <button type="button" onclick="capturePhoto()">Capturar</button>
+      <button type="submit" onclick="return ensurePhoto()">Próximo</button>
+    </div>
+  </form>
+</div>
+{% endif %}
+
+{% if wizard.step == 3 %}
+<form method="post" action="{{ url_for('visitor.wizard_finish') }}" class="card">
+  <label>Local / Pessoa / Setor que irá visitar</label>
+  <input name="destination" required />
+  <button type="submit">Finalizar e Registrar Entrada</button>
+</form>
+{% endif %}
+
+{% endblock %}

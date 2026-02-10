@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Registrar Entrada (Cadastro existente)</h1>
+
+<div class="card">
+  <div style="display:flex; gap:16px; align-items:flex-start;">
+    <img src="{{ url_for('visitor.uploaded_file', filename=visitor.photo_rel_path) }}"
+         style="width:140px;height:140px;object-fit:cover;border-radius:12px;border:1px solid #ddd;" />
+    <div>
+      <div><strong>Nome:</strong> {{ visitor.name }}</div>
+      <div><strong>CPF:</strong> {{ visitor.cpf }}</div>
+
+      <form method="post" style="margin-top:12px;">
+        <label>Local / Destino</label>
+        <input name="destination" required />
+        <button type="submit">Registrar Entrada</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

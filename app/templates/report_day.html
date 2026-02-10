@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>{{ title }}</h1>
+
+<table class="table">
+  <thead>
+    <tr>
+      <th>Entrada</th>
+      <th>Saída</th>
+      <th>Nome</th>
+      <th>CPF</th>
+      <th>Destino</th>
+      <th>Foto</th>
+      {% if show_checkout %}<th>Ação</th>{% endif %}
+    </tr>
+  </thead>
+  <tbody>
+    {% for v in visits %}
+    <tr>
+      <td>{{ v.check_in.strftime("%d/%m/%Y %H:%M:%S") }}</td>
+      <td>{% if v.check_out %}{{ v.check_out.strftime("%d/%m/%Y %H:%M:%S") }}{% else %}-{% endif %}</td>
+      <td>{{ v.visitor.name }}</td>
+      <td>{{ v.visitor.cpf }}</td>
+      <td>{{ v.destination }}</td>
+      <td><img src="{{ url_for('visitor.uploaded_file', filename=v.visitor.photo_rel_path) }}"style="width:80px;height:80px;object-fit:cover;border-radius:8px;border:1px solid #ddd;" /></td>
+
+      {% if show_checkout %}
+      <td>
+        <form method="post" action="{{ url_for('visitor.checkout', visit_id=v.id) }}">
+          <button type="submit">Dar saída</button>
+        </form>
+      </td>
+      {% endif %}
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
