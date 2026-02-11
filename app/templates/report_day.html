@@ -22,8 +22,8 @@
       <td>{{ v.visitor.name }}</td>
       <td>{{ v.visitor.cpf }}</td>
       <td>{{ v.destination }}</td>
-      <td><img src="{{ url_for('visitor.uploaded_file', filename=v.visitor.photo_rel_path) }}"style="width:80px;height:80px;object-fit:cover;border-radius:8px;border:1px solid #ddd;" /></td>
-
+      <td><img src="{{ url_for('visitor.uploaded_file', filename=v.visitor.photo_rel_path) }}?v={{ v.visitor.id }}" style="width:80px;height:80px;object-fit:cover;border-radius:8px;border:1px solid #ddd;"alt="Foto"/></td>
+    
       {% if show_checkout %}
       <td>
         <form method="post" action="{{ url_for('visitor.checkout', visit_id=v.id) }}">

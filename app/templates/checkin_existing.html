@@ -4,7 +4,7 @@
 
 <div class="card">
   <div style="display:flex; gap:16px; align-items:flex-start;">
-    <img src="{{ url_for('visitor.uploaded_file', filename=visitor.photo_rel_path) }}"
+    <img src="{{ url_for('visitor.uploaded_file', filename=visitor.photo_rel_path) }}?v={{ visitor.id }}"
          style="width:140px;height:140px;object-fit:cover;border-radius:12px;border:1px solid #ddd;" />
     <div>
       <div><strong>Nome:</strong> {{ visitor.name }}</div>
@@ -14,6 +14,8 @@
         <label>Local / Destino</label>
         <input name="destination" required />
         <button type="submit">Registrar Entrada</button>
+        <a href="{{ url_for('visitor.visitor_edit', visitor_id=visitor.id) }}">Editar cadastro</a>
+
       </form>
     </div>
   </div>

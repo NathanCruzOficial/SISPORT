@@ -22,11 +22,13 @@ def wizard_start_for_new_visitor(cpf: str = ""):
         "photo_rel_path": "",
     }
 
-def wizard_step1_submit(name: str, cpf: str):
+def wizard_step1_submit(name: str, cpf: str, phone:str):
     """Etapa 1: salva nome/CPF e vai para etapa 2."""
     w = session.get("wizard") or {}
-    w.update({"name": (name or "").strip(), "cpf": (cpf or "").strip(), "step": 2})
+    w.update({"name": (name or "").strip(), "cpf": (cpf or "").strip(), "phone": (phone or "").strip(), "step": 2})
     session["wizard"] = w
+
+    
 
 def wizard_step2_submit(photo_data_url: str):
     """Etapa 2: salva foto do cadastro (vinculada ao CPF) e vai para etapa 3."""
@@ -39,6 +41,46 @@ def wizard_step2_submit(photo_data_url: str):
     w.update({"photo_rel_path": photo_rel_path, "step": 3})
     session["wizard"] = w
 
+def visitor_photo_update(visitor: Visitor, photo_data_url: str):
+    """Atualiza foto de visitante já cadastrado (pode ser feita tanto pelo wizard quanto pela edição de visitante)."""
+    if not visitor.cpf:
+        raise ValueError("Visitante sem CPF não pode ter foto vinculada.")
+    photo_rel_path = save_or_replace_profile_photo(photo_data_url, visitor.cpf)
+    visitor.photo_rel_path = photo_rel_path
+    db.session.commit()
+
+
+
+'''
+import base64, os, re
+from flask import current_app
+from ..extensions import db
+
+def visitor_photo_update(visitor: Visitor, photo_data_url: str) -> None:
+    m = re.match(r"^data:image/(png|jpeg|jpg);base64,(.+)$", (photo_data_url or "").strip(), re.I)
+    if not m:
+        raise ValueError("Foto inválida.")
+
+    ext = m.group(1).lower()
+    ext = "jpg" if ext in ("jpeg", "jpg") else "png"
+    img_bytes = base64.b64decode(m.group(2), validate=True)
+
+    base = current_app.config["UPLOAD_FOLDER"]          # EX: app/uploads
+    folder = os.path.join(base, visitor.cpf)            # EX: app/uploads/<cpf>
+    os.makedirs(folder, exist_ok=True)
+
+    filename = f"foto.{ext}"
+    abs_path = os.path.join(folder, filename)
+    with open(abs_path, "wb") as f:
+        f.write(img_bytes)
+
+    visitor.photo_rel_path = f"{visitor.cpf}/{filename}"  # para sua rota /uploads/<path:filename>
+    db.session.commit()
+
+'''
+
+
+
 def create_visitor_if_not_exists_from_wizard() -> Visitor:
     """
     Cria o cadastro do visitante caso não exista.
@@ -47,6 +89,7 @@ def create_visitor_if_not_exists_from_wizard() -> Visitor:
     w = session.get("wizard") or {}
     name = (w.get("name") or "").strip()
     cpf = (w.get("cpf") or "").strip()
+    phone = (w.get("phone") or "").strip()
     photo_rel_path = (w.get("photo_rel_path") or "").strip()
 
     if not name or not cpf or not photo_rel_path:
@@ -56,7 +99,7 @@ def create_visitor_if_not_exists_from_wizard() -> Visitor:
     if existing:
         return existing
 
-    visitor = Visitor(name=name, cpf=cpf, photo_rel_path=photo_rel_path)
+    visitor = Visitor(name=name, cpf=cpf, phone=phone, photo_rel_path=photo_rel_path)
     db.session.add(visitor)
     db.session.commit()
     return visitor
