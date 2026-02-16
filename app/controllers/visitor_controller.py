@@ -167,6 +167,8 @@ def checkout_visit(visit_id: int):
     if not visit:
         raise ValueError("Visita não encontrada.")
     if visit.check_out is None:
-        visit.check_out = datetime.now()
+        visit.check_out = datetime.utcnow()
+        # em algum lugar do seu checkout
+        visit.visitor.last_checkout_at = visit.check_out  # ← atualiza retenção
         db.session.commit()
     return visit

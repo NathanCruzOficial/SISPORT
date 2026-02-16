@@ -21,6 +21,9 @@ class Visitor(db.Model):
 
     visits = db.relationship("Visit", back_populates="visitor", lazy=True)
 
+    # NOVO: última saída registrada (para retenção)
+    last_checkout_at = db.Column(db.DateTime, nullable=True, index=True)
+
 
 
 class Visit(db.Model):

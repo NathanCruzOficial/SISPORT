@@ -16,7 +16,9 @@ def create_app():
 
     # Registra rotas (blueprints/views).
     from .views.visitor_views import visitor_bp
+    from .views.admin_settings import admin_bp
     app.register_blueprint(visitor_bp)
+    app.register_blueprint(admin_bp)
 
     # Cria as tabelas ao subir (para ambiente local simples).
     with app.app_context():
