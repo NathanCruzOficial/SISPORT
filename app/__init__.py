@@ -1,28 +1,33 @@
-import os
+"""
+app/__init__.py — Factory da aplicação Flask
+==============================================
+"""
+
 from flask import Flask
 from .config import Config
 from .extensions import db
+from app.paths import ensure_app_dirs
 
-# Cria e configura a aplicação Flask (factory pattern).
-def create_app():
+
+def create_app() -> Flask:
+    # Cria todas as pastas do sistema (db, uploads, logs, etc.)
+    ensure_app_dirs()
+
     app = Flask(__name__)
     app.config.from_object(Config)
 
-    # Garante que a pasta de uploads existe.
-    os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
-
-    # Inicializa extensões.
+    # Inicializa extensões
     db.init_app(app)
 
-    # Registra rotas (blueprints/views).
+    # Registra blueprints
     from .views.visitor_views import visitor_bp
     from .views.admin_settings import admin_bp
     app.register_blueprint(visitor_bp)
     app.register_blueprint(admin_bp)
 
-    # Cria as tabelas ao subir (para ambiente local simples).
+    # Cria tabelas
     with app.app_context():
-        from .models import visitor  # noqa: F401 (importa modelos)
+        from .models import visitor  # noqa: F401
         db.create_all()
 
     return app

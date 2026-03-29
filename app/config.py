@@ -1,14 +1,20 @@
-import os
+"""
+app/config.py — Configurações do Flask
+========================================
+Caminhos vêm do paths.py. Aqui só tem config do Flask.
+"""
 
-BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+import os
+from app.paths import db_path, UPLOADS_DIR
+
 
 class Config:
-    # Configuração do SQLite local.
-    SQLALCHEMY_DATABASE_URI = "sqlite:///" + os.path.join(BASE_DIR, "data.sqlite3")
+    # Banco SQLite
+    SQLALCHEMY_DATABASE_URI = f"sqlite:///{db_path()}"
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
-    # Chave para sessão (wizard multi-etapas).
-    SECRET_KEY = os.environ.get("SECRET_KEY", "cruz-local-dev-key")
+    # Sessão
+    SECRET_KEY = os.environ.get("SECRET_KEY", "sisport-local-dev-key")
 
-    # Pasta para salvar fotos capturadas.
-    UPLOAD_FOLDER = os.path.join(BASE_DIR, "uploads")
+    # Uploads — mesma pasta que o paths.py gerencia
+    UPLOAD_FOLDER = str(UPLOADS_DIR)

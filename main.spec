@@ -8,7 +8,7 @@ datas = [
 ]
 
 a = Analysis(
-    ['main.py'],
+    ['runtime_hooks.py'],
     pathex=[],
     binaries=[],
     datas=datas,
@@ -27,7 +27,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='main',
+    name='sisport',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -46,5 +46,5 @@ coll = COLLECT(
     strip=False,
     upx=False,
     upx_exclude=[],
-    name='main',
+    name='sisport',
 )
