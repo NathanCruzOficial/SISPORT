@@ -13,11 +13,11 @@ class Visitor(db.Model):
 
     cpf = db.Column(db.String(16), nullable=False, unique=True, index=True)
     phone = db.Column(db.String(20), nullable=False)
-    email = db.Column(db.String(254), nullable=False, unique=True, index=True)
+    email = db.Column(db.String(254), nullable=True, unique=True, index=True) # opcional porém único
 
     empresa = db.Column(db.String(120), nullable=True)       # opcional
 
-    photo_rel_path = db.Column(db.String(500), nullable=False)
+    photo_rel_path = db.Column(db.String(500), nullable=True)
 
     visits = db.relationship("Visit", back_populates="visitor", lazy=True)
 

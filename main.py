@@ -176,7 +176,7 @@ def _run_browser_mode():
 
     log.info("=" * 50)
     log.info(f"  {APP_NAME} v{__version__}")
-    log.info(f"  Modo: Browser (console ativo)")
+    log.info("  Modo: Browser (console ativo)")
     log.info(f"  URL:  http://{HOST}:{PORT}")
     log.info(f"  Dados: {APP_DIR}")
     log.info("=" * 50)

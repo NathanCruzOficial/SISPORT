@@ -79,15 +79,30 @@
     return canvas.toDataURL(mime, quality);
   }
 
-  // uma única definição global
-  window.ensurePhoto = function ensurePhoto() {
-    const input = document.querySelector('[data-camera="1"] input[name="photo_data_url"]');
-    if (!input || !input.value) {
-      alert("Capture a foto antes de continuar.");
-      return false;
-    }
-    return true;
-  };
+// Substitua a versão atual por esta:
+window.ensurePhoto = function ensurePhoto(e) {
+  const submitter = e && e.submitter;
+  if (submitter && submitter.name === 'skip') {
+    return true; // não valida quando for "Pular"
+  }
+  const input = document.querySelector('[data-camera="1"] input[name="photo_data_url"]');
+  if (!input || !input.value) {
+    alert('Capture a foto antes de continuar. Ou clique em "Pular sem foto".');
+    return false;
+  }
+  return true;
+};
+
+document.addEventListener("DOMContentLoaded", () => {
+  window.initCameraBlocks?.();
+
+  // Opcional: garante que não vai nenhuma foto residual ao pular
+  document.getElementById('skip-btn')?.addEventListener('click', () => {
+    const h = document.getElementById('photo_data_url');
+    if (h) h.value = '';
+  });
+});
+
 
   window.initCameraBlocks = function initCameraBlocks() {
     document.querySelectorAll('[data-camera="1"]').forEach(block => {

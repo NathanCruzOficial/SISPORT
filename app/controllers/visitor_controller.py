@@ -23,20 +23,23 @@ def wizard_start_for_new_visitor(cpf: str = ""):
         "name": "",
         "cpf": (cpf or "").strip(),
         "phone": "",
-        "email": "",
+        "email": None,  # ← use None, não string vazia
         "empresa": "",
         "father_name": "",
         "mom_name": "",
         "photo_rel_path": "",
     }
 
+
 def wizard_step1_submit(name: str, father_name: str, mom_name: str,
                        cpf: str, phone: str, email: str, empresa: str):
     w = session.get("wizard") or {}
 
-    name = (name or "").strip()
-    father_name = (father_name or "").strip()
-    mom_name = (mom_name or "").strip()
+    # Maiúsculo para nomes e empresa
+    name = (name or "").strip().upper()
+    father_name = (father_name or "").strip().upper()
+    mom_name = (mom_name or "").strip().upper()
+    empresa = (empresa or "").strip().upper()
 
     cpf = normalize_cpf(cpf or "")
     if not is_valid_cpf(cpf):
@@ -45,10 +48,13 @@ def wizard_step1_submit(name: str, father_name: str, mom_name: str,
     phone = (phone or "").strip()
     if not phone:
         raise ValueError("Telefone/Celular é obrigatório.")
-
-    email = validate_required_email(email)
-
-    empresa = (empresa or "").strip()  # opcional
+    
+    # E-mail opcional, sempre minúsculo quando presente
+    email = (email or "").strip()
+    if email:
+        email = validate_required_email(email).lower()
+    else:
+        email = None
 
     if not name:
         raise ValueError("Nome completo é obrigatório.")
@@ -61,25 +67,32 @@ def wizard_step1_submit(name: str, father_name: str, mom_name: str,
         "mom_name": mom_name,
         "cpf": cpf,
         "phone": phone,
-        "email": email,
+        "email": email,   # None ou minúsculo
         "empresa": empresa,
         "step": 2
     })
     session["wizard"] = w
 
 
+
+
     
 
-def wizard_step2_submit(photo_data_url: str):
-    """Etapa 2: salva foto do cadastro (vinculada ao CPF) e vai para etapa 3."""
+def wizard_step2_submit(photo_data_url: str | None):
+    """Etapa 2: salva foto (opcional) e vai para etapa 3."""
     w = session.get("wizard") or {}
     cpf = (w.get("cpf") or "").strip()
     if not cpf:
         raise ValueError("CPF não informado. Volte à etapa 1.")
 
-    photo_rel_path = save_or_replace_profile_photo(photo_data_url, cpf)
+    photo_data_url = (photo_data_url or "").strip()
+    photo_rel_path = None
+    if photo_data_url:
+        photo_rel_path = save_or_replace_profile_photo(photo_data_url, cpf)
+
     w.update({"photo_rel_path": photo_rel_path, "step": 3})
     session["wizard"] = w
+
 
 def visitor_photo_update(visitor: Visitor, photo_data_url: str):
     """Atualiza foto de visitante já cadastrado (pode ser feita tanto pelo wizard quanto pela edição de visitante)."""
@@ -122,31 +135,38 @@ def visitor_photo_update(visitor: Visitor, photo_data_url: str) -> None:
 
 
 def create_visitor_if_not_exists_from_wizard() -> Visitor:
-    """
-    Cria o cadastro do visitante caso não exista.
-    Se já existir (condição de corrida/uso), retorna o existente.
-    """
     w = session.get("wizard") or {}
     name = (w.get("name") or "").strip()
     father_name = (w.get("father_name") or "").strip()
     mom_name = (w.get("mom_name") or "").strip()
     cpf = (w.get("cpf") or "").strip()
     phone = (w.get("phone") or "").strip()
-    email = (w.get("email") or "").strip()
+    email = w.get("email") or None
     empresa = (w.get("empresa") or "").strip()
-    photo_rel_path = (w.get("photo_rel_path") or "").strip()
+    photo_rel_path = (w.get("photo_rel_path") or None)
 
-    if not name or not cpf or not photo_rel_path or not phone or not email or not mom_name:
-        raise ValueError("Cadastro incompleto (nome, cpf, telefone, e-mail, nome da mãe e foto).")
+    if not name or not cpf or not phone or not mom_name:
+        raise ValueError("Cadastro incompleto (nome, cpf, telefone e nome da mãe).")
 
     existing = find_visitor_by_cpf(cpf)
     if existing:
         return existing
 
-    visitor = Visitor(name=name, cpf=cpf, phone=phone, photo_rel_path=photo_rel_path, email=email, empresa=empresa, father_name=father_name, mom_name=mom_name)
+    visitor = Visitor(
+        name=name,
+        cpf=cpf,
+        phone=phone,
+        photo_rel_path=photo_rel_path,  # pode ser None
+        email=email,
+        empresa=empresa,
+        father_name=father_name,
+        mom_name=mom_name
+    )
     db.session.add(visitor)
     db.session.commit()
     return visitor
+
+
 
 def register_checkin(visitor: Visitor, destination: str) -> int:
     """

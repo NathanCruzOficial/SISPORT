@@ -109,8 +109,10 @@ def wizard_step1():
 @visitor_bp.route("/wizard/step2", methods=["POST"])
 def wizard_step2():
     """Etapa 2 do wizard: captura e salvamento da foto vinculada ao CPF."""
+    skip = request.form.get("skip")
+    photo_data_url = None if skip else (request.form.get("photo_data_url") or "")
     try:
-        wizard_step2_submit(request.form.get("photo_data_url", ""))
+        wizard_step2_submit(photo_data_url)
     except Exception as e:
         flash(str(e), "danger")
     return redirect(url_for("visitor.wizard"))

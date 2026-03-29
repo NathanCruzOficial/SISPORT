@@ -55,12 +55,12 @@
           <div class="row g-3">
             <div class="col-12">
               <label class="form-label">Nome completo</label>
-              <input class="form-control form-control-lg" name="name" required value="{{ wizard.name }}" placeholder="Ex: João da Silva">
+              <input class="form-control form-control-lg text-uppercase" name="name" required value="{{ wizard.name }}" placeholder="Ex: João da Silva">
             </div>
 
             <div class="col-12 col-md-6">
               <label class="form-label">Nome da Mãe</label>
-              <input class="form-control form-control-lg"
+              <input class="form-control form-control-lg text-uppercase"
                     name="mom_name"
                     required
                     value="{{ wizard.mom_name or '' }}"
@@ -69,7 +69,7 @@
 
             <div class="col-12 col-md-6">
               <label class="form-label">Nome do Pai</label>
-              <input class="form-control form-control-lg"
+              <input class="form-control form-control-lg text-uppercase"
                     name="father_name"
                     value="{{ wizard.father_name or '' }}"
                     placeholder="Nome do pai (opcional)">
@@ -94,17 +94,16 @@
 
             <div class="col-12 col-md-6">
               <label class="form-label">E-mail</label>
-              <input class="form-control form-control-lg"
+              <input class="form-control form-control-lg text-lowercase"
                     type="email"
                     name="email"
-                    required
                     value="{{ wizard.email or '' }}"
                     placeholder="seuemail@gmail.com">
             </div>
 
             <div class="col-12 col-md-6">
               <label class="form-label">Vínculo Empresarial</label>
-              <input class="form-control form-control-lg"
+              <input class="form-control form-control-lg text-uppercase"
                     name="empresa"
                     value="{{ wizard.empresa or '' }}"
                     placeholder="(opcional) Ex: Técnico da Comlurb">
@@ -141,7 +140,7 @@
   <div class="p-3 p-md-4">
     <form method="post"
           action="{{ url_for('visitor.wizard_step2') }}"
-          onsubmit="return ensurePhoto();">
+          onsubmit="return ensurePhoto(event);">
 
       <div class="row g-4" data-camera="1">
         <div class="col-12 col-lg-7">
@@ -174,6 +173,13 @@
 
             <button type="submit" class="btn btn-primary btn-lg" data-enable-on-capture disabled>
               Próximo <i class="bi bi-arrow-right ms-1"></i>
+            </button>
+
+            <button type="submit" name="skip" value="1"
+            class="btn btn-outline-secondary"
+            id="skip-btn"
+            formnovalidate>
+              Pular sem foto
             </button>
 
             <a class="btn btn-outline-secondary" href="{{ url_for('visitor.wizard') }}">
