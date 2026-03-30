@@ -38,7 +38,8 @@ from ..controllers.visitor_controller import (
     create_visitor_if_not_exists_from_wizard,
     register_checkin,
     checkout_visit,
-    visitor_photo_update
+    visitor_photo_update,
+    _check_duplicate_fields,
 )
 from ..controllers.report_controller import day_report
 from ..utils.validators import normalize_cpf, is_valid_cpf, validate_required_email
@@ -343,24 +344,19 @@ def visitor_edit(visitor_id):
 def visitor_edit_post(visitor_id):
     """
     Processa o formulário de edição de visitante. Valida campos
-    obrigatórios (nome, telefone, nome da mãe, e-mail) e persiste
-    as alterações no banco. Trata conflito de e-mail duplicado.
-
-    :param visitor_id: (int) ID do visitante na URL.
-    :input: form['name'], form['phone'], form['mom_name'],
-            form['father_name'], form['empresa'], form['email'].
-    :return: Redirect para visitor_edit com mensagem de sucesso ou erro.
+    obrigatórios, verifica duplicidade no banco (excluindo o próprio
+    visitante) e persiste as alterações.
     """
     v = db.session.get(Visitor, visitor_id)
     if not v:
         flash("Visitante não encontrado.", "warning")
         return redirect(url_for("visitor.identify"))
 
-    name = (request.form.get("name") or "").strip()
+    name = (request.form.get("name") or "").strip().upper()
     phone = (request.form.get("phone") or "").strip()
-    mom_name = (request.form.get("mom_name") or "").strip()
-    father_name = (request.form.get("father_name") or "").strip()
-    empresa = (request.form.get("empresa") or "").strip()
+    mom_name = (request.form.get("mom_name") or "").strip().upper()
+    father_name = (request.form.get("father_name") or "").strip().upper()
+    empresa = (request.form.get("empresa") or "").strip().upper()
 
     try:
         email = validate_required_email(request.form.get("email", ""))
@@ -378,6 +374,21 @@ def visitor_edit_post(visitor_id):
         flash("Nome da mãe é obrigatório.", "danger")
         return redirect(url_for("visitor.visitor_edit", visitor_id=v.id))
 
+    # ── Verificação de duplicidade (exclui o próprio visitante) ───
+    try:
+        _check_duplicate_fields(
+            name=name,
+            father_name=father_name,
+            mom_name=mom_name,
+            cpf=v.cpf,          # CPF não muda na edição
+            phone=phone,
+            email=email,
+            exclude_id=v.id,    # ← ignora ele mesmo na busca
+        )
+    except ValueError as e:
+        flash(str(e), "danger")
+        return redirect(url_for("visitor.visitor_edit", visitor_id=v.id))
+
     v.name = name
     v.phone = phone
     v.email = email
@@ -390,10 +401,9 @@ def visitor_edit_post(visitor_id):
         flash("Cadastro atualizado.", "success")
     except IntegrityError:
         db.session.rollback()
-        flash("Erro ao salvar: este e-mail já está cadastrado para outro visitante.", "danger")
+        flash("Erro ao salvar: conflito de dados.", "danger")
 
     return redirect(url_for("visitor.visitor_edit", visitor_id=v.id))
-
 
 # =====================================================================
 # Rotas — Atualização de Foto de Visitante

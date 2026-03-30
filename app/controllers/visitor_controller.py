@@ -15,6 +15,7 @@ from ..extensions import db
 from ..models.visitor import Visitor, Visit
 from ..services.photo_service import save_or_replace_profile_photo
 from ..utils.validators import normalize_cpf, is_valid_cpf, validate_required_email
+from sqlalchemy import or_
 
 
 # =====================================================================
@@ -59,12 +60,88 @@ def wizard_start_for_new_visitor(cpf: str = ""):
     }
 
 
+def _check_duplicate_fields(name: str, father_name: str, mom_name: str,
+                            cpf: str, phone: str, email: str | None,
+                            exclude_id: int | None = None):
+    """
+    Verifica se algum dos campos informados já pertence a um visitante
+    cadastrado no banco de dados. Se encontrar duplicidade, levanta
+    ValueError com a lista detalhada de conflitos.
+
+    :param name:        (str) Nome completo.
+    :param father_name: (str) Nome do pai.
+    :param mom_name:    (str) Nome da mãe.
+    :param cpf:         (str) CPF normalizado.
+    :param phone:       (str) Telefone.
+    :param email:       (str | None) E-mail (pode ser None).
+    :param exclude_id:  (int | None) ID do visitante a ignorar (para edição).
+    :raises ValueError: Se qualquer campo já estiver em uso por outro visitante.
+    """
+
+    # ── Monta filtros dinâmicos (só campos preenchidos) ───────────
+    filters = [
+        Visitor.cpf == cpf,
+        Visitor.name == name,
+        Visitor.mom_name == mom_name,
+        Visitor.phone == phone,
+    ]
+
+    if father_name:
+        filters.append(Visitor.father_name == father_name)
+
+    if email:
+        filters.append(Visitor.email == email)
+
+    # ── Uma única query com OR ────────────────────────────────────
+    query = db.session.query(Visitor).filter(or_(*filters))
+
+    # ── Exclui o próprio visitante na edição ──────────────────────
+    if exclude_id is not None:
+        query = query.filter(Visitor.id != exclude_id)
+
+    matches = query.all()
+
+    if not matches:
+        return  # ✅ Nenhuma duplicidade
+
+    # ── Mapeia quais campos conflitaram ───────────────────────────
+    conflicts = []
+
+    for visitor in matches:
+        visitor_label = f"{visitor.name} (CPF: {visitor.cpf})"
+
+        if visitor.cpf == cpf:
+            conflicts.append(f"• CPF já cadastrado por: {visitor_label}")
+
+        if visitor.name == name:
+            conflicts.append(f"• Nome completo já cadastrado por: {visitor_label}")
+
+        if visitor.mom_name == mom_name:
+            conflicts.append(f"• Nome da mãe já cadastrado por: {visitor_label}")
+
+        if visitor.phone == phone:
+            conflicts.append(f"• Telefone já cadastrado por: {visitor_label}")
+
+        if father_name and visitor.father_name == father_name:
+            conflicts.append(f"• Nome do pai já cadastrado por: {visitor_label}")
+
+        if email and visitor.email == email:
+            conflicts.append(f"• E-mail já cadastrado por: {visitor_label}")
+
+    detail = "\n".join(conflicts)
+    raise ValueError(
+        f"Dados já em uso por visitante(s) cadastrado(s):\n{detail}\n"
+        f"Utilize a busca por CPF para localizar o registro existente."
+    )
+
+
 def wizard_step1_submit(name: str, father_name: str, mom_name: str,
                        cpf: str, phone: str, email: str, empresa: str):
     """
     Processa e valida os dados da Etapa 1 do wizard (dados pessoais).
     Normaliza campos (uppercase para nomes, lowercase para e-mail),
-    valida CPF, telefone, nome e nome da mãe, e avança para a etapa 2.
+    valida CPF, telefone, nome e nome da mãe, verifica duplicidade
+    de cada campo no banco de dados e avança para a etapa 2.
 
     :param name:        (str) Nome completo do visitante.
     :param father_name: (str) Nome do pai (opcional).
@@ -74,11 +151,11 @@ def wizard_step1_submit(name: str, father_name: str, mom_name: str,
     :param email:       (str) E-mail (opcional).
     :param empresa:     (str) Empresa do visitante (opcional).
     :return: None — atualiza session["wizard"] e avança step para 2.
-    :raises ValueError: Se CPF, telefone, nome ou nome da mãe forem inválidos/ausentes.
+    :raises ValueError: Se dados forem inválidos/ausentes ou já existirem no banco.
     """
     w = session.get("wizard") or {}
 
-    # Maiúsculo para nomes e empresa
+    # ── Normalização ──────────────────────────────────────────────
     name = (name or "").strip().upper()
     father_name = (father_name or "").strip().upper()
     mom_name = (mom_name or "").strip().upper()
@@ -91,8 +168,7 @@ def wizard_step1_submit(name: str, father_name: str, mom_name: str,
     phone = (phone or "").strip()
     if not phone:
         raise ValueError("Telefone/Celular é obrigatório.")
-    
-    # E-mail opcional, sempre minúsculo quando presente
+
     email = (email or "").strip()
     if email:
         email = validate_required_email(email).lower()
@@ -104,17 +180,29 @@ def wizard_step1_submit(name: str, father_name: str, mom_name: str,
     if not mom_name:
         raise ValueError("Nome da mãe é obrigatório.")
 
+    # ── Verificação de duplicidade no banco ───────────────────────
+    _check_duplicate_fields(
+        name=name,
+        father_name=father_name,
+        mom_name=mom_name,
+        cpf=cpf,
+        phone=phone,
+        email=email,
+    )
+
+    # ── Atualiza sessão e avança para etapa 2 ────────────────────
     w.update({
         "name": name,
         "father_name": father_name,
         "mom_name": mom_name,
         "cpf": cpf,
         "phone": phone,
-        "email": email,   # None ou minúsculo
+        "email": email,
         "empresa": empresa,
         "step": 2
     })
     session["wizard"] = w
+
 
 
 def wizard_step2_submit(photo_data_url: str | None):

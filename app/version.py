@@ -11,7 +11,7 @@
 
 # Versão atual da aplicação (Semantic Versioning: MAJOR.MINOR.PATCH).
 # Utilizada pelo updater.py para comparar com a release mais recente no GitHub.
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 # Nome da aplicação exibido em diálogos de atualização e interfaces.
 APP_NAME = "SISPORT - Controle de Visitantes"
