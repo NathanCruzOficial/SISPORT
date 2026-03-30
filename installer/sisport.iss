@@ -1,8 +1,8 @@
 #define AppName "SISPORT"
-#define AppVersion "1.0.0"
+#define AppVersion "1.1.0"
 #define AppPublisher "Nathan Cruz"
 #define AppExeName "sisport.exe"
-#define BuildDir "dist\\main"
+#define BuildDir "../dist\\sisport"
 
 [Setup]
 AppId={{SISPORT-2026}}
@@ -17,7 +17,7 @@ DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
 
 OutputDir=.\installer_output
-OutputBaseFilename={#AppName}-Setup-v{#AppVersion}
+OutputBaseFilename={#AppName}-v{#AppVersion}_setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern

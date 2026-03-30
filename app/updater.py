@@ -8,9 +8,8 @@
 # ─────────────────────────────────────────────────────────────────────
 # Imports
 # ─────────────────────────────────────────────────────────────────────
-import os
 import sys
-import tempfile
+import time
 import subprocess
 
 import requests
@@ -18,6 +17,7 @@ from packaging import version
 
 import tkinter as tk
 from tkinter import messagebox
+from app.paths import UPDATE_DIR
 
 
 # =====================================================================
@@ -75,29 +75,31 @@ def _pick_installer_asset(release_json: dict) -> dict:
 
 
 # =====================================================================
-# Funções — Download do Instalador
+# Funções — Download do Instalador (Updater)
 # =====================================================================
 
-def _download_to_temp(url: str) -> str:
+def _download_to_updates(url: str, filename: str) -> str:
     """
-    Faz o download de um arquivo (instalador) para um diretório
-    temporário do sistema via streaming, evitando carregar tudo em
-    memória de uma vez.
+    Baixa o instalador para o diretório controlado da aplicação.
+    """
 
-    :param url: (str) URL direta para download do arquivo.
-    :return: (str) Caminho absoluto do arquivo temporário salvo (.exe).
-    :raises requests.HTTPError: Se o download falhar.
-    """
-    fd, path = tempfile.mkstemp(suffix=".exe")
-    os.close(fd)
+    # Garante que a pasta existe
+    UPDATE_DIR.mkdir(parents=True, exist_ok=True)
+
+    file_path = UPDATE_DIR / filename
+
+    # Remove versão anterior (evita conflito)
+    if file_path.exists():
+        file_path.unlink()
 
     with requests.get(url, stream=True, timeout=60) as r:
         r.raise_for_status()
-        with open(path, "wb") as f:
+        with open(file_path, "wb") as f:
             for chunk in r.iter_content(chunk_size=1024 * 256):
                 if chunk:
                     f.write(chunk)
-    return path
+
+    return str(file_path)
 
 
 # =====================================================================
@@ -146,10 +148,12 @@ def check_and_offer_update(current_version: str, repo: str, app_name: str) -> No
 
         asset = _pick_installer_asset(rel)
         installer_url = asset["browser_download_url"]
-        installer_path = _download_to_temp(installer_url)
+        file_name = asset["name"]  # <- vem do GitHub
+        installer_path = _download_to_updates(installer_url, file_name)
 
         # Executa o instalador em modo normal (vai perguntar pasta, permissões, etc.)
-        subprocess.Popen([installer_path], shell=False)
+        subprocess.Popen([installer_path, "/VERYSILENT", "/NORESTART"], shell=False)
+        time.sleep(1)
         sys.exit(0)
 
     except Exception:

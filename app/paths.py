@@ -65,9 +65,10 @@ UPLOADS_DIR = APP_DIR / "uploads"    # Fotos de visitantes (por CPF)
 LOG_DIR     = APP_DIR / "logs"       # Arquivos de log
 CONFIG_DIR  = APP_DIR / "config"     # Configurações (settings.json)
 BACKUP_DIR  = APP_DIR / "backups"    # Backups do banco de dados
+UPDATE_DIR  = APP_DIR / "update"     # Arquivo temporário do instalador baixado
 
 # Tupla com todos os diretórios que devem ser criados na inicialização.
-_ALL_DIRS = (DB_DIR, UPLOADS_DIR, LOG_DIR, CONFIG_DIR, BACKUP_DIR)
+_ALL_DIRS = (DB_DIR, UPLOADS_DIR, LOG_DIR, CONFIG_DIR, BACKUP_DIR, UPDATE_DIR)
 
 
 # =====================================================================

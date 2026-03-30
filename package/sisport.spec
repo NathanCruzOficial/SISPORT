@@ -1,19 +1,13 @@
 # -*- mode: python ; coding: utf-8 -*-
 
-import os
-
-# __file__ aponta para o próprio .spec em execução
-spec_dir = os.path.dirname(os.path.abspath(__file__))
-base_dir = os.path.dirname(spec_dir)  # sobe um nível (de package/ para raiz)
-
 datas = [
-    (os.path.join(base_dir, 'icone.ico'), '.'),
-    (os.path.join(base_dir, 'app', 'templates'), 'app/templates'),
-    (os.path.join(base_dir, 'app', 'static'), 'app/static'),
+    ('../icone.ico', '.'), 
+    ("../app/templates", "app/templates"),
+    ("../app/static", "app/static"),
 ]
 
 a = Analysis(
-    [os.path.join(base_dir, 'main.py')],
+    ['../main.py'],
     pathex=[],
     binaries=[],
     datas=datas,
@@ -32,7 +26,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    icon=os.path.join(base_dir, 'icone.ico'),
+    icon='../icone.ico',
     name='sisport',
     debug=False,
     bootloader_ignore_signals=False,
