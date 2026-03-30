@@ -1,13 +1,40 @@
+# =====================================================================
+# masks.py
+# Funções de Mascaramento de Dados Pessoais — Responsável por aplicar
+# máscaras de privacidade em dados sensíveis de visitantes (nome,
+# nome da mãe, telefone e e-mail) para exibição em relatórios e
+# interfaces onde a informação completa não deve ser exposta.
+# =====================================================================
+
+# ─────────────────────────────────────────────────────────────────────
+# Imports
+# ─────────────────────────────────────────────────────────────────────
 import re
 
-# partículas comuns que você pode querer ignorar nas iniciais
+
+# ─────────────────────────────────────────────────────────────────────
+# Variáveis Globais — Tokens Ignorados
+# ─────────────────────────────────────────────────────────────────────
+
+# Partículas comuns em nomes brasileiros que são ignoradas ao gerar
+# iniciais (preposições e conjunções sem valor identificador).
 _SKIP_TOKENS = {"da", "de", "do", "das", "dos", "e"}
+
+
+# =====================================================================
+# Funções — Mascaramento de Nomes
+# =====================================================================
 
 def mask_name_first_plus_initials(value: str | None, *, uppercase: bool = True) -> str:
     """
-    "NATHAN DA CRUZ CARDOSO" -> "NATHAN D. C. C."
-    Mantém primeiro token completo e transforma os demais em iniciais.
-    Nunca retorna None (bom p/ colunas NOT NULL).
+    Mantém o primeiro nome completo e substitui os demais por iniciais,
+    ignorando partículas comuns (da, de, do, etc.).
+
+    Exemplo: "NATHAN DA CRUZ CARDOSO" → "NATHAN C. C."
+
+    :param value:     (str | None) Nome completo do visitante.
+    :param uppercase: (bool) Se True, retorna em caixa alta (padrão: True).
+    :return: (str) Nome mascarado com iniciais. Retorna "" se vazio/None.
     """
     if not value:
         return ""
@@ -42,8 +69,14 @@ def mask_name_first_plus_initials(value: str | None, *, uppercase: bool = True) 
 
 def mask_mom_name_keep_first(value: str | None, *, uppercase: bool = True) -> str:
     """
-    Nome da mãe: só o primeiro nome (sem apagar, sem NULL).
-    Ex: "Maria de Souza" -> "MARIA"
+    Mantém apenas o primeiro nome da mãe, descartando sobrenomes
+    e partículas. Útil para exibição parcial em relatórios.
+
+    Exemplo: "Maria de Souza" → "MARIA"
+
+    :param value:     (str | None) Nome completo da mãe.
+    :param uppercase: (bool) Se True, retorna em caixa alta (padrão: True).
+    :return: (str) Primeiro nome da mãe. Retorna "" se vazio/None.
     """
     if not value:
         return ""
@@ -54,10 +87,19 @@ def mask_mom_name_keep_first(value: str | None, *, uppercase: bool = True) -> st
     return res.upper() if uppercase else res
 
 
+# =====================================================================
+# Funções — Mascaramento de Telefone
+# =====================================================================
+
 def mask_phone_last4(value: str | None) -> str:
     """
-    "(21) 99876-1234" -> "(**) *****-1234"
-    Mantém só os últimos 4 dígitos.
+    Mascara o telefone mantendo apenas os últimos 4 dígitos visíveis.
+    Aceita qualquer formato de entrada (com ou sem pontuação).
+
+    Exemplo: "(21) 99876-1234" → "(**) *****-1234"
+
+    :param value: (str | None) Telefone em qualquer formato.
+    :return: (str) Telefone mascarado. Retorna "" se vazio/None.
     """
     if not value:
         return ""
@@ -67,9 +109,24 @@ def mask_phone_last4(value: str | None) -> str:
     return f"(**) *****-{digits[-4:]}"
 
 
+# =====================================================================
+# Funções — Mascaramento de E-mail
+# =====================================================================
+
 def mask_email_2first_2last_before_at(value: str | None) -> str:
     """
-    "joaosilva@gmail.com" -> "jo**va@gmail.com"
+    Mascara a parte local do e-mail, mantendo os 2 primeiros e os
+    2 últimos caracteres antes do '@'. O domínio permanece visível.
+
+    Exemplo: "joaosilva@gmail.com" → "jo**va@gmail.com"
+
+    Tratamento por tamanho da parte local:
+    - Até 2 caracteres:  mantém o primeiro + "*"
+    - 3 caracteres:      mantém os 2 primeiros + "*"
+    - 4+ caracteres:     mantém 2 primeiros + "**" + 2 últimos
+
+    :param value: (str | None) Endereço de e-mail completo.
+    :return: (str) E-mail mascarado. Retorna "" se vazio/None ou sem '@'.
     """
     if not value or "@" not in value:
         return ""

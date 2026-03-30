@@ -1,3 +1,13 @@
+# =====================================================================
+# visitor_controller.py
+# Controller de Visitantes — Gerencia todo o fluxo de cadastro de
+# visitantes via wizard (etapas 1→2→3), busca por CPF, atualização
+# de foto, registro de check-in e check-out de visitas.
+# =====================================================================
+
+# ─────────────────────────────────────────────────────────────────────
+# Imports
+# ─────────────────────────────────────────────────────────────────────
 from datetime import datetime
 import email
 from flask import session
@@ -7,15 +17,33 @@ from ..services.photo_service import save_or_replace_profile_photo
 from ..utils.validators import normalize_cpf, is_valid_cpf, validate_required_email
 
 
+# =====================================================================
+# Funções — Busca de Visitante
+# =====================================================================
+
 def find_visitor_by_cpf(cpf: str):
-    """Busca visitante cadastrado pelo CPF."""
+    """
+    Busca visitante cadastrado pelo CPF.
+
+    :param cpf: (str) CPF do visitante (com ou sem formatação).
+    :return: Instância de Visitor se encontrado, ou None.
+    """
     cpf = (cpf or "").strip()
     return db.session.query(Visitor).filter(Visitor.cpf == cpf).one_or_none()
 
+
+# =====================================================================
+# Funções — Wizard de Cadastro (Etapas 1, 2 e finalização)
+# =====================================================================
+
 def wizard_start_for_new_visitor(cpf: str = ""):
     """
-    Inicializa wizard apenas para novo cadastro.
-    Não guarda imagem base64 na sessão.
+    Inicializa a sessão do wizard para um novo cadastro de visitante.
+    Define os campos padrão e posiciona na etapa 1.
+    Não armazena imagem base64 na sessão.
+
+    :param cpf: (str) CPF pré-preenchido (opcional).
+    :return: None — os dados são gravados em session["wizard"].
     """
     session["wizard"] = {
         "mode": "new",
@@ -33,6 +61,21 @@ def wizard_start_for_new_visitor(cpf: str = ""):
 
 def wizard_step1_submit(name: str, father_name: str, mom_name: str,
                        cpf: str, phone: str, email: str, empresa: str):
+    """
+    Processa e valida os dados da Etapa 1 do wizard (dados pessoais).
+    Normaliza campos (uppercase para nomes, lowercase para e-mail),
+    valida CPF, telefone, nome e nome da mãe, e avança para a etapa 2.
+
+    :param name:        (str) Nome completo do visitante.
+    :param father_name: (str) Nome do pai (opcional).
+    :param mom_name:    (str) Nome da mãe (obrigatório).
+    :param cpf:         (str) CPF do visitante.
+    :param phone:       (str) Telefone/celular (obrigatório).
+    :param email:       (str) E-mail (opcional).
+    :param empresa:     (str) Empresa do visitante (opcional).
+    :return: None — atualiza session["wizard"] e avança step para 2.
+    :raises ValueError: Se CPF, telefone, nome ou nome da mãe forem inválidos/ausentes.
+    """
     w = session.get("wizard") or {}
 
     # Maiúsculo para nomes e empresa
@@ -74,12 +117,15 @@ def wizard_step1_submit(name: str, father_name: str, mom_name: str,
     session["wizard"] = w
 
 
-
-
-    
-
 def wizard_step2_submit(photo_data_url: str | None):
-    """Etapa 2: salva foto (opcional) e vai para etapa 3."""
+    """
+    Processa a Etapa 2 do wizard: salva a foto de perfil (opcional)
+    e avança para a etapa 3 (confirmação/finalização).
+
+    :param photo_data_url: (str | None) Foto em formato data URL (base64). Pode ser None.
+    :return: None — atualiza session["wizard"] com photo_rel_path e avança step para 3.
+    :raises ValueError: Se o CPF não estiver presente na sessão do wizard.
+    """
     w = session.get("wizard") or {}
     cpf = (w.get("cpf") or "").strip()
     if not cpf:
@@ -94,47 +140,16 @@ def wizard_step2_submit(photo_data_url: str | None):
     session["wizard"] = w
 
 
-def visitor_photo_update(visitor: Visitor, photo_data_url: str):
-    """Atualiza foto de visitante já cadastrado (pode ser feita tanto pelo wizard quanto pela edição de visitante)."""
-    if not visitor.cpf:
-        raise ValueError("Visitante sem CPF não pode ter foto vinculada.")
-    photo_rel_path = save_or_replace_profile_photo(photo_data_url, visitor.cpf)
-    visitor.photo_rel_path = photo_rel_path
-    db.session.commit()
-
-
-
-'''
-import base64, os, re
-from flask import current_app
-from ..extensions import db
-
-def visitor_photo_update(visitor: Visitor, photo_data_url: str) -> None:
-    m = re.match(r"^data:image/(png|jpeg|jpg);base64,(.+)$", (photo_data_url or "").strip(), re.I)
-    if not m:
-        raise ValueError("Foto inválida.")
-
-    ext = m.group(1).lower()
-    ext = "jpg" if ext in ("jpeg", "jpg") else "png"
-    img_bytes = base64.b64decode(m.group(2), validate=True)
-
-    base = current_app.config["UPLOAD_FOLDER"]          # EX: app/uploads
-    folder = os.path.join(base, visitor.cpf)            # EX: app/uploads/<cpf>
-    os.makedirs(folder, exist_ok=True)
-
-    filename = f"foto.{ext}"
-    abs_path = os.path.join(folder, filename)
-    with open(abs_path, "wb") as f:
-        f.write(img_bytes)
-
-    visitor.photo_rel_path = f"{visitor.cpf}/{filename}"  # para sua rota /uploads/<path:filename>
-    db.session.commit()
-
-'''
-
-
-
 def create_visitor_if_not_exists_from_wizard() -> Visitor:
+    """
+    Finaliza o wizard: cria o visitante no banco de dados a partir dos
+    dados armazenados na sessão. Se já existir um visitante com o mesmo
+    CPF, retorna o registro existente sem duplicar.
+
+    :return: (Visitor) Instância do visitante criado ou já existente.
+    :raises ValueError: Se dados obrigatórios (nome, cpf, telefone, nome da mãe)
+                        estiverem ausentes na sessão.
+    """
     w = session.get("wizard") or {}
     name = (w.get("name") or "").strip()
     father_name = (w.get("father_name") or "").strip()
@@ -167,10 +182,74 @@ def create_visitor_if_not_exists_from_wizard() -> Visitor:
     return visitor
 
 
+# =====================================================================
+# Funções — Foto de Visitante
+# =====================================================================
+
+def visitor_photo_update(visitor: Visitor, photo_data_url: str):
+    """
+    Atualiza a foto de perfil de um visitante já cadastrado.
+    Pode ser chamada tanto pelo wizard quanto pela edição direta.
+
+    :param visitor:        (Visitor) Instância do visitante a ser atualizado.
+    :param photo_data_url: (str) Foto em formato data URL (base64).
+    :return: None — atualiza visitor.photo_rel_path e persiste no banco.
+    :raises ValueError: Se o visitante não possuir CPF vinculado.
+    """
+    if not visitor.cpf:
+        raise ValueError("Visitante sem CPF não pode ter foto vinculada.")
+    photo_rel_path = save_or_replace_profile_photo(photo_data_url, visitor.cpf)
+    visitor.photo_rel_path = photo_rel_path
+    db.session.commit()
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Código legado comentado — versão anterior de visitor_photo_update
+# que realizava o salvamento manual da foto (base64 → arquivo).
+# Substituída pelo uso centralizado de save_or_replace_profile_photo.
+# ─────────────────────────────────────────────────────────────────────
+'''
+import base64, os, re
+from flask import current_app
+from ..extensions import db
+
+def visitor_photo_update(visitor: Visitor, photo_data_url: str) -> None:
+    m = re.match(r"^data:image/(png|jpeg|jpg);base64,(.+)$", (photo_data_url or "").strip(), re.I)
+    if not m:
+        raise ValueError("Foto inválida.")
+
+    ext = m.group(1).lower()
+    ext = "jpg" if ext in ("jpeg", "jpg") else "png"
+    img_bytes = base64.b64decode(m.group(2), validate=True)
+
+    base = current_app.config["UPLOAD_FOLDER"]          # EX: app/uploads
+    folder = os.path.join(base, visitor.cpf)            # EX: app/uploads/<cpf>
+    os.makedirs(folder, exist_ok=True)
+
+    filename = f"foto.{ext}"
+    abs_path = os.path.join(folder, filename)
+    with open(abs_path, "wb") as f:
+        f.write(img_bytes)
+
+    visitor.photo_rel_path = f"{visitor.cpf}/{filename}"  # para sua rota /uploads/<path:filename>
+    db.session.commit()
+
+'''
+
+
+# =====================================================================
+# Funções — Check-in / Check-out de Visitas
+# =====================================================================
 
 def register_checkin(visitor: Visitor, destination: str) -> int:
     """
-    Registra uma nova entrada (visita) para um visitante já cadastrado.
+    Registra uma nova entrada (check-in) para um visitante já cadastrado,
+    criando um registro de visita com horário de entrada e destino.
+
+    :param visitor:     (Visitor) Instância do visitante.
+    :param destination: (str) Local/destino da visita (obrigatório).
+    :return: (int) ID da visita recém-criada.
+    :raises ValueError: Se o destino não for informado.
     """
     destination = (destination or "").strip()
     if not destination:
@@ -182,7 +261,14 @@ def register_checkin(visitor: Visitor, destination: str) -> int:
     return visit.id
 
 def checkout_visit(visit_id: int):
-    """Registra saída para uma visita em aberto."""
+    """
+    Registra a saída (check-out) de uma visita em aberto, preenchendo
+    o horário de saída e atualizando a data de última saída do visitante.
+
+    :param visit_id: (int) ID da visita a ser encerrada.
+    :return: (Visit) Instância da visita atualizada.
+    :raises ValueError: Se a visita não for encontrada no banco.
+    """
     visit = db.session.get(Visit, visit_id)
     if not visit:
         raise ValueError("Visita não encontrada.")

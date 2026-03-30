@@ -1,3 +1,13 @@
+# =====================================================================
+# updater.py
+# Módulo de Atualização Automática — Verifica a existência de novas
+# versões no repositório GitHub, oferece ao usuário via diálogo
+# Tkinter e, se aceito, baixa e executa o instalador automaticamente.
+# =====================================================================
+
+# ─────────────────────────────────────────────────────────────────────
+# Imports
+# ─────────────────────────────────────────────────────────────────────
 import os
 import sys
 import tempfile
@@ -10,13 +20,37 @@ import tkinter as tk
 from tkinter import messagebox
 
 
+# =====================================================================
+# Funções — Interface de Diálogo (Tkinter)
+# =====================================================================
+
 def _ask_yes_no(title: str, message: str) -> bool:
+    """
+    Exibe um diálogo Sim/Não nativo do sistema via Tkinter (janela oculta).
+    Utilizado para perguntar ao usuário se deseja atualizar.
+
+    :param title:   (str) Título da janela de diálogo.
+    :param message: (str) Mensagem exibida no corpo do diálogo.
+    :return: (bool) True se o usuário clicou "Sim", False se "Não".
+    """
     root = tk.Tk()
     root.withdraw()
     return messagebox.askyesno(title, message)
 
 
+# =====================================================================
+# Funções — Comunicação com GitHub API
+# =====================================================================
+
 def _get_latest_release(repo: str) -> dict:
+    """
+    Consulta a API do GitHub para obter os dados da release mais
+    recente de um repositório público.
+
+    :param repo: (str) Identificador do repositório no formato 'owner/repo'.
+    :return: (dict) JSON da release mais recente retornado pela API.
+    :raises requests.HTTPError: Se a requisição falhar (404, 403, etc.).
+    """
     url = f"https://api.github.com/repos/{repo}/releases/latest"
     r = requests.get(url, timeout=10)
     r.raise_for_status()
@@ -25,9 +59,13 @@ def _get_latest_release(repo: str) -> dict:
 
 def _pick_installer_asset(release_json: dict) -> dict:
     """
-    Padronize o nome do asset do instalador, ex:
-      SISPORTSetup.exe
-    e/ou qualquer coisa terminando com Setup.exe
+    Localiza o asset do instalador dentro dos assets de uma release.
+    Procura por arquivos cujo nome termine com '_setup.exe'
+    (ex: SISPORTSetup.exe, sisport_setup.exe).
+
+    :param release_json: (dict) JSON da release retornado pela API do GitHub.
+    :return: (dict) Dicionário do asset encontrado (contém 'browser_download_url', etc.).
+    :raises RuntimeError: Se nenhum asset com sufixo '_setup.exe' for encontrado.
     """
     for a in release_json.get("assets", []):
         name = (a.get("name") or "").lower()
@@ -36,7 +74,20 @@ def _pick_installer_asset(release_json: dict) -> dict:
     raise RuntimeError("Release encontrada, mas não achei nenhum asset terminando em 'Setup.exe'.")
 
 
+# =====================================================================
+# Funções — Download do Instalador
+# =====================================================================
+
 def _download_to_temp(url: str) -> str:
+    """
+    Faz o download de um arquivo (instalador) para um diretório
+    temporário do sistema via streaming, evitando carregar tudo em
+    memória de uma vez.
+
+    :param url: (str) URL direta para download do arquivo.
+    :return: (str) Caminho absoluto do arquivo temporário salvo (.exe).
+    :raises requests.HTTPError: Se o download falhar.
+    """
     fd, path = tempfile.mkstemp(suffix=".exe")
     os.close(fd)
 
@@ -49,10 +100,30 @@ def _download_to_temp(url: str) -> str:
     return path
 
 
+# =====================================================================
+# Função Principal — Verificação e Oferta de Atualização
+# =====================================================================
+
 def check_and_offer_update(current_version: str, repo: str, app_name: str) -> None:
     """
-    Rode isso no início do programa.
-    Se o usuário aceitar, executa o instalador e encerra o app.
+    Verifica se há uma versão mais recente no GitHub e oferece
+    atualização ao usuário. Fluxo completo:
+
+    1. Consulta a release mais recente via API do GitHub.
+    2. Compara a versão remota com a versão instalada (semantic versioning).
+    3. Se houver atualização, exibe diálogo Sim/Não ao usuário.
+    4. Se aceito, localiza o asset do instalador na release.
+    5. Baixa o instalador para pasta temporária.
+    6. Executa o instalador e encerra a aplicação atual (sys.exit).
+
+    Em caso de qualquer erro, retorna silenciosamente sem travar
+    a inicialização da aplicação.
+
+    :param current_version: (str) Versão atualmente instalada (ex: '1.2.0').
+    :param repo:            (str) Repositório GitHub no formato 'owner/repo'.
+    :param app_name:        (str) Nome da aplicação para exibir no diálogo.
+    :return: None. Encerra o processo via sys.exit(0) se o usuário aceitar
+             a atualização; caso contrário, retorna normalmente.
     """
     try:
         rel = _get_latest_release(repo)

@@ -1,22 +1,67 @@
+{# ================================================================== #}
+{# templates/base.html                                                #}
+{# Template Base (Layout Master) — Estrutura HTML compartilhada por   #}
+{# todas as páginas do SISPORT. Define:                               #}
+{#   • <head>: meta tags, Bootstrap 5 CSS/Icons, variáveis CSS e     #}
+{#     estilos globais do sistema (navbar oliva, cards, footer fixo). #}
+{#   • Navbar: logo + links de navegação (Identificação, Abertos,    #}
+{#     Registro) + botão de configurações (admin).                    #}
+{#   • Flash messages: exibição automática de alertas do Flask.       #}
+{#   • Footer fixo: créditos do desenvolvedor e versão do sistema.    #}
+{#   • Scripts globais: Bootstrap JS, IMask.js e mask.js.             #}
+{#                                                                    #}
+{# Blocos disponíveis para os templates filhos:                       #}
+{#   {% block head_extra %}  — CSS/meta adicionais no <head>.        #}
+{#   {% block content %}     — Conteúdo principal da página.          #}
+{#   {% block scripts %}     — Scripts adicionais antes do </body>.  #}
+{#                                                                    #}
+{# Dependências externas (CDN):                                       #}
+{#   • Bootstrap 5.3.3 (CSS + JS Bundle)                             #}
+{#   • Bootstrap Icons 1.11.3                                        #}
+{#   • IMask.js (última versão)                                      #}
+{#                                                                    #}
+{# Assets locais:                                                     #}
+{#   • static/img/logo.png  — Logotipo exibido na navbar.            #}
+{#   • static/js/mask.js    — Máscaras de input (CPF, tel, CNPJ).   #}
+{# ================================================================== #}
+
 <!doctype html>
 <html lang="pt-br">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  {# Título da página: recebe variável 'title' do template filho ou usa fallback "SISPORT" #}
   <title>{{ title or "SISPORT" }}</title>
 
+  {# ────────────────────────────────────────────────────────────────
+     CSS Externo — Bootstrap 5 + Bootstrap Icons (CDN)
+     ──────────────────────────────────────────────────────────────── #}
   <!-- Bootstrap 5 -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <!-- Bootstrap Icons -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
 
+  {# ────────────────────────────────────────────────────────────────
+     CSS Inline — Estilos Globais do SISPORT
+     ──────────────────────────────────────────────────────────────── #}
   <style>
+
+    /* ═════════════════════════════════════════════════════════════
+       Variáveis CSS (Design Tokens)
+       --olive / --olive-dark: paleta institucional (verde oliva)
+       --bg: cor de fundo padrão das páginas
+       ═════════════════════════════════════════════════════════════ */
     :root{
       --olive: #556B2F;
       --olive-dark: #3F5222;
       --bg: #f6f7f8;
     }
 
+    /* ═════════════════════════════════════════════════════════════
+       Layout Global — App Shell (flex column full-height)
+       Garante que o footer fique sempre na base da viewport.
+       ═════════════════════════════════════════════════════════════ */
     html, body { height: 100%; }
     body { background: var(--bg); }
 
@@ -28,9 +73,12 @@
 
     main{
       flex: 1 0 auto;
-      padding-bottom: 72px; /* espaço pro footer fixo */
+      padding-bottom: 72px; /* espaço reservado para o footer fixo */
     }
 
+    /* ═════════════════════════════════════════════════════════════
+       Footer Fixo — Sempre visível na base da tela
+       ═════════════════════════════════════════════════════════════ */
     footer.app-footer{
       position: fixed;
       left: 0; right: 0; bottom: 0;
@@ -41,12 +89,15 @@
       z-index: 1030;
     }
 
-    /* Navbar oliva */
+    /* ═════════════════════════════════════════════════════════════
+       Navbar — Barra de navegação superior (tema verde oliva)
+       ═════════════════════════════════════════════════════════════ */
     .navbar-olive{
       background: var(--olive);
       box-shadow: 0 6px 18px rgba(0,0,0,.12);
     }
 
+    /* Logo + Título "SISPORT" */
     .brand-wrap{
       display:flex; align-items:center; gap:.75rem;
       color:#fff; text-decoration:none;
@@ -65,7 +116,7 @@
       line-height: 1;
     }
 
-    /* Links com animação/feedback */
+    /* Links de navegação — estados hover, active, pressed */
     .nav-link{
       color: rgba(255,255,255,.92) !important;
       border-radius: 12px;
@@ -86,6 +137,7 @@
       font-weight: 700;
     }
 
+    /* Botão ícone (engrenagem de configurações) */
     .icon-btn{
       color: #fff !important;
       border-radius: 12px;
@@ -95,7 +147,10 @@
     .icon-btn:hover{ background: rgba(255,255,255,.12); transform: translateY(-1px); }
     .icon-btn:active{ transform: translateY(0px) scale(.98); background: rgba(0,0,0,.12); }
 
-    /* Cards padrão do fluxo */
+    /* ═════════════════════════════════════════════════════════════
+       Cards — Componente padrão para conteúdo centralizado
+       Usado em formulários, listagens e confirmações.
+       ═════════════════════════════════════════════════════════════ */
     .center-card{
       max-width: 980px;
       margin: 24px auto;
@@ -107,7 +162,10 @@
     }
     .center-card .card-body{ padding: 22px; }
 
-    /* Carteira / identidade */
+    /* ═════════════════════════════════════════════════════════════
+       ID Card — Carteira/identidade do visitante
+       Exibida na tela de confirmação e impressão.
+       ═════════════════════════════════════════════════════════════ */
     .id-card{
       border-radius: 18px;
       border: 1px solid rgba(0,0,0,.08);
@@ -140,7 +198,9 @@
     }
     .photo-box img{ width: 100%; height: 100%; object-fit: cover; display:block; }
 
-    /* Ficha (edição) */
+    /* ═════════════════════════════════════════════════════════════
+       Sheet — Ficha de edição/cadastro do visitante
+       ═════════════════════════════════════════════════════════════ */
     .sheet{
       border-radius: 18px;
       background: #fff;
@@ -154,44 +214,60 @@
     }
     .sheet-header h2{ margin:0; font-size: 1.1rem; font-weight: 900; }
 
+    /* Utilitário — texto secundário */
     .muted{ color: #6c757d; }
   </style>
 
+  {# Bloco para CSS ou meta tags extras nos templates filhos #}
   {% block head_extra %}{% endblock %}
 </head>
 
 <body>
 <div class="app-shell">
 
+  {# ────────────────────────────────────────────────────────────────
+     Navbar — Navegação principal do sistema
+     Links: Identificação | Abertos | Registro | ⚙ Configurações
+     ──────────────────────────────────────────────────────────────── #}
   <nav class="navbar navbar-expand-lg navbar-olive">
     <div class="container-fluid px-3">
+
+      {# Logo + Nome do sistema — redireciona para a tela de identificação #}
       <a class="brand-wrap" href="{{ url_for('visitor.identify') }}">
-        <!-- coloque um arquivo em static/img/logo.png -->
-        <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Logo">
+        <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Logo SISPORT">
         <div class="brand-title">SISPORT</div>
       </a>
 
+      {# Toggler para dispositivos móveis (hamburger menu) #}
       <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navMain">
         <span class="navbar-toggler-icon"></span>
       </button>
 
       <div class="collapse navbar-collapse" id="navMain">
+
+        {# Links de navegação com destaque condicional (classe .active) #}
         <ul class="navbar-nav ms-auto me-2 gap-1">
+
+          {# Identificação — Tela inicial de busca/cadastro por CPF #}
           <li class="nav-item">
             <a class="nav-link {% if request.endpoint in ['visitor.identify'] %}active{% endif %}"
                href="{{ url_for('visitor.identify') }}">Identificação</a>
           </li>
+
+          {# Abertos — Lista de visitas em andamento (sem check-out) #}
           <li class="nav-item">
             <a class="nav-link {% if request.endpoint in ['visitor.wizard'] %}active{% endif %}"
                href="{{ url_for('visitor.open_visits') }}">Abertos</a>
           </li>
+
+          {# Registro — Relatório diário de visitas #}
           <li class="nav-item">
             <a class="nav-link {% if request.endpoint in ['visitor.report_today','visitor.open_visits'] %}active{% endif %}"
                href="{{ url_for('visitor.report_today') }}">Registro</a>
           </li>
         </ul>
 
-        <!-- Engrenagem (sem rota ainda; deixa como #) -->
+        {# Botão de configurações (admin) — ícone de engrenagem #}
         <a class="icon-btn" href="{{ url_for('admin.settings_page') }}" title="Configurações" aria-label="Configurações">
           <i class="bi bi-gear-fill fs-5"></i>
         </a>
@@ -199,8 +275,13 @@
     </div>
   </nav>
 
+  {# ────────────────────────────────────────────────────────────────
+     Conteúdo Principal — Flash messages + bloco content
+     ──────────────────────────────────────────────────────────────── #}
   <main class="container-fluid">
     <div class="px-2 px-md-4">
+
+      {# Flash Messages — Alertas automáticos do Flask (success, danger, warning, info) #}
       {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
           <div class="mt-3">
@@ -211,27 +292,39 @@
         {% endif %}
       {% endwith %}
 
+      {# Bloco de conteúdo — sobrescrito por cada template filho #}
       {% block content %}{% endblock %}
     </div>
   </main>
 
+  {# ────────────────────────────────────────────────────────────────
+     Footer Fixo — Créditos e versão do sistema
+     ──────────────────────────────────────────────────────────────── #}
   <footer class="app-footer">
     <div class="container-fluid px-1 px-md-3">
       <div class="d-flex flex-column flex-md-row justify-content-between gap-1">
-        <div><strong>Desenvolvido por Nathan da Cruz Cardoso</strong><div class="muted">SD EP Cruz Aux E7 GUEs/9ª Bda Inf Mtz</div></div>
-        <div class="muted">Rio de Janeiro, RJ - SISPORT V1.0 Beta </div>
+        <div>
+          <strong>Desenvolvido por Nathan da Cruz Cardoso</strong>
+          <div class="muted">SD EP Cruz Aux E7 GUEs/9ª Bda Inf Mtz</div>
+        </div>
+        <div class="muted">Rio de Janeiro, RJ - SISPORT V1.0 Beta</div>
       </div>
     </div>
   </footer>
 
-</div>
+</div>{# /.app-shell #}
 
+{# ──────────────────────────────────────────────────────────────────
+   Scripts Globais — Carregados em todas as páginas
+   1. Bootstrap 5 JS Bundle (Popper.js incluso)
+   2. IMask.js (biblioteca de máscaras de input)
+   3. mask.js  (configuração local das máscaras: CPF, tel, CNPJ)
+   ────────────────────────────────────────────────────────────────── #}
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<!-- IMask biblioteca (CDN) -->
 <script src="https://cdn.jsdelivr.net/npm/imask@latest"></script>
-
-<!-- Seu arquivo de máscaras (carrega em TODOS os templates) -->
 <script src="{{ url_for('static', filename='js/mask.js') }}"></script>
+
+{# Bloco para scripts adicionais nos templates filhos #}
 {% block scripts %}{% endblock %}
 </body>
 </html>

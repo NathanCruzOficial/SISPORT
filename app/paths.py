@@ -1,18 +1,46 @@
-"""
-app/paths.py — Caminhos centralizados do Sisport
-==================================================
-"""
+# =====================================================================
+# app/paths.py
+# Caminhos Centralizados do SISPORT — Responsável por definir e
+# gerenciar todos os diretórios e caminhos de arquivos utilizados
+# pela aplicação (banco de dados, uploads, logs, configurações e
+# backups), com suporte multiplataforma (Windows, macOS, Linux).
+# =====================================================================
 
+# ─────────────────────────────────────────────────────────────────────
+# Imports
+# ─────────────────────────────────────────────────────────────────────
 from __future__ import annotations
 
 import os
 import sys
 from pathlib import Path
 
+
+# ─────────────────────────────────────────────────────────────────────
+# Constantes — Nome do Diretório Raiz da Aplicação
+# ─────────────────────────────────────────────────────────────────────
+
+# Nome da pasta raiz criada no diretório de dados do sistema operacional.
 APP_DIR_NAME = "SISPORT"
 
 
+# =====================================================================
+# Função Interna — Resolução do Diretório Base por Plataforma
+# =====================================================================
+
 def _get_base_dir() -> Path:
+    """
+    Determina o diretório base da aplicação de acordo com o sistema
+    operacional, seguindo as convenções de cada plataforma:
+
+    - Windows:  %LOCALAPPDATA%/SISPORT
+                (fallback: ~/AppData/Local/SISPORT)
+    - macOS:    ~/Library/Application Support/SISPORT
+    - Linux:    $XDG_DATA_HOME/SISPORT
+                (fallback: ~/.local/share/SISPORT)
+
+    :return: (Path) Caminho absoluto do diretório raiz da aplicação.
+    """
     if sys.platform == "win32":
         base = os.environ.get("LOCALAPPDATA")
         if not base:
@@ -27,28 +55,66 @@ def _get_base_dir() -> Path:
         return Path(base) / APP_DIR_NAME
 
 
-APP_DIR     = _get_base_dir()
-DB_DIR      = APP_DIR / "db"
-UPLOADS_DIR = APP_DIR / "uploads"
-LOG_DIR     = APP_DIR / "logs"
-CONFIG_DIR  = APP_DIR / "config"
-BACKUP_DIR  = APP_DIR / "backups"
+# ─────────────────────────────────────────────────────────────────────
+# Constantes — Diretórios da Aplicação
+# ─────────────────────────────────────────────────────────────────────
 
+APP_DIR     = _get_base_dir()        # Diretório raiz da aplicação
+DB_DIR      = APP_DIR / "db"         # Banco de dados SQLite
+UPLOADS_DIR = APP_DIR / "uploads"    # Fotos de visitantes (por CPF)
+LOG_DIR     = APP_DIR / "logs"       # Arquivos de log
+CONFIG_DIR  = APP_DIR / "config"     # Configurações (settings.json)
+BACKUP_DIR  = APP_DIR / "backups"    # Backups do banco de dados
+
+# Tupla com todos os diretórios que devem ser criados na inicialização.
 _ALL_DIRS = (DB_DIR, UPLOADS_DIR, LOG_DIR, CONFIG_DIR, BACKUP_DIR)
 
 
+# =====================================================================
+# Função — Criação dos Diretórios da Aplicação
+# =====================================================================
+
 def ensure_app_dirs() -> None:
+    """
+    Cria todos os diretórios necessários para o funcionamento da
+    aplicação, caso ainda não existam. Chamada durante a inicialização
+    na factory create_app().
+
+    Diretórios criados: db, uploads, logs, config, backups.
+    """
     for d in _ALL_DIRS:
         d.mkdir(parents=True, exist_ok=True)
 
 
+# =====================================================================
+# Funções — Resolução de Caminhos de Arquivos Específicos
+# =====================================================================
+
 def db_path(filename: str = "data.sqlite3") -> Path:
+    """
+    Retorna o caminho absoluto para um arquivo de banco de dados.
+
+    :param filename: (str) Nome do arquivo (padrão: 'data.sqlite3').
+    :return: (Path) Caminho completo: DB_DIR/<filename>.
+    """
     return DB_DIR / filename
 
 
 def log_path(filename: str = "sisport.log") -> Path:
+    """
+    Retorna o caminho absoluto para um arquivo de log.
+
+    :param filename: (str) Nome do arquivo (padrão: 'sisport.log').
+    :return: (Path) Caminho completo: LOG_DIR/<filename>.
+    """
     return LOG_DIR / filename
 
 
 def config_path(filename: str = "settings.json") -> Path:
+    """
+    Retorna o caminho absoluto para um arquivo de configuração.
+
+    :param filename: (str) Nome do arquivo (padrão: 'settings.json').
+    :return: (Path) Caminho completo: CONFIG_DIR/<filename>.
+    """
     return CONFIG_DIR / filename

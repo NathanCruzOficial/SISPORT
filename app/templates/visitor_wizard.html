@@ -1,9 +1,44 @@
+<!-- =================================================================
+  templates/visitor_wizard.html
+  Wizard de Cadastro de Visitante — Formulário guiado em 3 etapas
+  para o cadastro completo de um novo visitante no SISPORT.
+
+  Etapas:
+    1. Identificação — Dados pessoais (nome, CPF, filiação, contato)
+    2. Foto          — Captura de foto via webcam (ou pular)
+    3. Local/Destino — Setor/pessoa que o visitante irá visitar +
+                       registro automático do check-in
+
+  Variáveis de contexto esperadas:
+    wizard.step        (int)  — Etapa atual (1, 2 ou 3)
+    wizard.name        (str)  — Nome completo (preenchido etapa 1)
+    wizard.cpf         (str)  — CPF do visitante
+    wizard.mom_name    (str)  — Nome da mãe
+    wizard.father_name (str)  — Nome do pai (opcional)
+    wizard.phone       (str)  — Celular
+    wizard.email       (str)  — E-mail (opcional)
+    wizard.empresa     (str)  — Vínculo empresarial (opcional)
+
+  Rotas utilizadas (POST):
+    visitor.wizard_step1  — Processa etapa 1 → avança para 2
+    visitor.wizard_step2  — Processa etapa 2 (foto) → avança para 3
+    visitor.wizard_finish — Processa etapa 3 → finaliza cadastro +
+                            registra check-in da visita
+
+  Extends: base.html
+  Blocos: content, scripts
+  Assets: static/js/camera.js (controle da webcam na etapa 2)
+================================================================= -->
+
 {% extends "base.html" %}
 
 {% block content %}
 <div class="center-card">
   <div class="card-body">
 
+    <!-- ─────────────────────────────────────────────────────────────
+         Cabeçalho — Título da página + botão Voltar
+         ───────────────────────────────────────────────────────────── -->
     <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-start gap-2 mb-3">
       <div>
         <h1 class="h4 mb-1">Novo Visitante</h1>
@@ -14,8 +49,12 @@
       </a>
     </div>
 
-    <!-- Stepper -->
+    <!-- ─────────────────────────────────────────────────────────────
+         Stepper Visual — Badges indicando a etapa atual + barra de
+         progresso (33% / 66% / 100%) conforme wizard.step.
+         ───────────────────────────────────────────────────────────── -->
     <div class="mb-4">
+      <!-- Badges das 3 etapas — a etapa ativa recebe text-bg-success -->
       <div class="d-flex flex-wrap gap-2">
         <div class="badge rounded-pill px-3 py-2 {% if wizard.step == 1 %}text-bg-success{% else %}text-bg-light{% endif %}">
           1 · Identificação
@@ -28,6 +67,7 @@
         </div>
       </div>
 
+      <!-- Barra de progresso — largura proporcional à etapa -->
       <div class="progress mt-3" style="height: 10px;">
         <div class="progress-bar bg-success"
              role="progressbar"
@@ -36,8 +76,12 @@
       </div>
     </div>
 
+    <!-- ===========================================================
+         ETAPA 1 — Identificação (Dados Pessoais)
+         Campos: nome, mãe, pai, CPF, celular, e-mail, empresa.
+         POST → visitor.wizard_step1
+         =========================================================== -->
     {% if wizard.step == 1 %}
-    <!-- Etapa 1 -->
     <div class="sheet">
       <div class="sheet-header">
         <div>
@@ -47,17 +91,17 @@
         <span class="badge text-bg-success">Etapa 1/3</span>
       </div>
 
-
-      <!-- CAMPOS DE PREENCHIMENTO -->
-
       <div class="p-3 p-md-4">
         <form method="post" action="{{ url_for('visitor.wizard_step1') }}">
           <div class="row g-3">
+
+            <!-- Nome completo (obrigatório) — text-uppercase para padronização -->
             <div class="col-12">
               <label class="form-label">Nome completo</label>
               <input class="form-control form-control-lg text-uppercase" name="name" required value="{{ wizard.name }}" placeholder="Ex: João da Silva">
             </div>
 
+            <!-- Nome da Mãe (obrigatório) -->
             <div class="col-12 col-md-6">
               <label class="form-label">Nome da Mãe</label>
               <input class="form-control form-control-lg text-uppercase"
@@ -67,6 +111,7 @@
                     placeholder="Nome completo da mãe">
             </div>
 
+            <!-- Nome do Pai (opcional) -->
             <div class="col-12 col-md-6">
               <label class="form-label">Nome do Pai</label>
               <input class="form-control form-control-lg text-uppercase"
@@ -75,12 +120,14 @@
                     placeholder="Nome do pai (opcional)">
             </div>
 
+            <!-- CPF (obrigatório) — máscara aplicada via mask.js (IMask) -->
             <div class="col-12 col-md-6">
               <label class="form-label">CPF</label>
               <input class="form-control form-control-lg" name="cpf" required value="{{ wizard.cpf }}" placeholder="000.000.000-00" inputmode="numeric">
               <div class="form-text">O CPF define a pasta da foto e vincula o cadastro.</div>
             </div>
 
+            <!-- Celular (obrigatório) — máscara aplicada via mask.js (IMask) -->
             <div class="col-12 col-md-6">
               <label class="form-label">Celular</label>
               <input class="form-control form-control-lg"
@@ -92,6 +139,7 @@
                     placeholder="(DDD) 9 1234-5678">
             </div>
 
+            <!-- E-mail (opcional) — text-lowercase para padronização -->
             <div class="col-12 col-md-6">
               <label class="form-label">E-mail</label>
               <input class="form-control form-control-lg text-lowercase"
@@ -101,6 +149,7 @@
                     placeholder="seuemail@gmail.com">
             </div>
 
+            <!-- Vínculo empresarial (opcional) — ex: prestador de serviço -->
             <div class="col-12 col-md-6">
               <label class="form-label">Vínculo Empresarial</label>
               <input class="form-control form-control-lg text-uppercase"
@@ -109,7 +158,7 @@
                     placeholder="(opcional) Ex: Técnico da Comlurb">
             </div>
 
-
+            <!-- Botões de ação: Cancelar (volta à identificação) / Próximo -->
             <div class="col-12 d-flex justify-content-end gap-2 pt-2">
               <a class="btn btn-outline-secondary" href="{{ url_for('visitor.identify') }}">Cancelar</a>
               <button class="btn btn-success btn-lg" type="submit">
@@ -119,88 +168,110 @@
           </div>
         </form>
       </div>
-
-      <!-- FIM DO CAMPO DE INFORMAÇÕES -->
-
     </div>
     {% endif %}
 
-<!-- ETAPA 2 -->
-
-{% if wizard.step == 2 %}
-<div class="sheet">
-  <div class="sheet-header">
-    <div>
-      <h2>Foto</h2>
-      <div class="muted small">Permita o acesso à câmera e capture a foto do visitante.</div>
-    </div>
-    <span class="badge text-bg-success">Etapa 2/3</span>
-  </div>
-
-  <div class="p-3 p-md-4">
-    <form method="post"
-          action="{{ url_for('visitor.wizard_step2') }}"
-          onsubmit="return ensurePhoto(event);">
-
-      <div class="row g-4" data-camera="1">
-        <div class="col-12 col-lg-7">
-          <div class="ratio ratio-4x3 rounded-4 border overflow-hidden bg-light">
-            <video playsinline muted style="object-fit: cover; width:100%; height:100%;"></video>
-          </div>
-
-          <img data-preview class="mt-3 rounded-4 border w-100" style="display:none;" alt="Prévia">
-
-          <div class="form-text mt-2">
-            Dica: centralize o rosto, mantenha boa iluminação e fundo neutro.
-          </div>
+    <!-- ===========================================================
+         ETAPA 2 — Foto (Captura via Webcam)
+         Utiliza a API MediaDevices (getUserMedia) controlada pelo
+         script camera.js. A imagem capturada é armazenada como
+         Data URL no campo hidden "photo_data_url".
+         O visitante pode pular esta etapa (botão "Pular sem foto").
+         POST → visitor.wizard_step2
+         =========================================================== -->
+    {% if wizard.step == 2 %}
+    <div class="sheet">
+      <div class="sheet-header">
+        <div>
+          <h2>Foto</h2>
+          <div class="muted small">Permita o acesso à câmera e capture a foto do visitante.</div>
         </div>
-
-        <div class="col-12 col-lg-5">
-          <input type="hidden" name="photo_data_url" id="photo_data_url">
-
-          <div class="d-grid gap-2">
-            <button type="button" class="btn btn-outline-success btn-lg" data-open>
-              <i class="bi bi-camera-video me-1"></i>Ativar câmera
-            </button>
-
-            <button type="button" class="btn btn-success btn-lg" data-capture disabled>
-              <i class="bi bi-camera me-1"></i>Capturar
-            </button>
-
-            <button type="button" class="btn btn-outline-danger btn-lg" data-close disabled>
-              <i class="bi bi-x-circle me-1"></i>Desativar câmera
-            </button>
-
-            <button type="submit" class="btn btn-primary btn-lg" data-enable-on-capture disabled>
-              Próximo <i class="bi bi-arrow-right ms-1"></i>
-            </button>
-
-            <button type="submit" name="skip" value="1"
-            class="btn btn-outline-secondary"
-            id="skip-btn"
-            formnovalidate>
-              Pular sem foto
-            </button>
-
-            <a class="btn btn-outline-secondary" href="{{ url_for('visitor.wizard') }}">
-              Voltar para etapa 1
-            </a>
-          </div>
-
-          <div class="alert alert-warning mt-3 mb-0">
-            Se a câmera não abrir, desative o Kaspersy Endpoint Security, caso o erro persista, abra o navegador em localhost.
-          </div>
-        </div>
+        <span class="badge text-bg-success">Etapa 2/3</span>
       </div>
-    </form>
-  </div>
-</div>
-{% endif %}
 
-<!-- ETAPA 3 -->
+      <div class="p-3 p-md-4">
+        <form method="post"
+              action="{{ url_for('visitor.wizard_step2') }}"
+              onsubmit="return ensurePhoto(event);">
 
+          <!-- Container da câmera — data-camera="1" usado pelo camera.js -->
+          <div class="row g-4" data-camera="1">
+
+            <!-- Coluna esquerda: viewfinder (vídeo ao vivo) + preview da captura -->
+            <div class="col-12 col-lg-7">
+              <!-- Stream de vídeo da webcam (ratio 4:3) -->
+              <div class="ratio ratio-4x3 rounded-4 border overflow-hidden bg-light">
+                <video playsinline muted style="object-fit: cover; width:100%; height:100%;"></video>
+              </div>
+
+              <!-- Preview da foto capturada (oculto até a captura) -->
+              <img data-preview class="mt-3 rounded-4 border w-100" style="display:none;" alt="Prévia">
+
+              <div class="form-text mt-2">
+                Dica: centralize o rosto, mantenha boa iluminação e fundo neutro.
+              </div>
+            </div>
+
+            <!-- Coluna direita: controles da câmera + navegação -->
+            <div class="col-12 col-lg-5">
+
+              <!-- Campo hidden que recebe o Data URL (base64) da foto capturada -->
+              <input type="hidden" name="photo_data_url" id="photo_data_url">
+
+              <div class="d-grid gap-2">
+                <!-- Ativar câmera — inicia stream via getUserMedia -->
+                <button type="button" class="btn btn-outline-success btn-lg" data-open>
+                  <i class="bi bi-camera-video me-1"></i>Ativar câmera
+                </button>
+
+                <!-- Capturar — tira snapshot do vídeo → preenche photo_data_url -->
+                <button type="button" class="btn btn-success btn-lg" data-capture disabled>
+                  <i class="bi bi-camera me-1"></i>Capturar
+                </button>
+
+                <!-- Desativar câmera — para a stream e libera o hardware -->
+                <button type="button" class="btn btn-outline-danger btn-lg" data-close disabled>
+                  <i class="bi bi-x-circle me-1"></i>Desativar câmera
+                </button>
+
+                <!-- Próximo — habilitado apenas após captura (data-enable-on-capture) -->
+                <button type="submit" class="btn btn-primary btn-lg" data-enable-on-capture disabled>
+                  Próximo <i class="bi bi-arrow-right ms-1"></i>
+                </button>
+
+                <!-- Pular sem foto — envia skip=1, ignora validação (formnovalidate) -->
+                <button type="submit" name="skip" value="1"
+                class="btn btn-outline-secondary"
+                id="skip-btn"
+                formnovalidate>
+                  Pular sem foto
+                </button>
+
+                <!-- Voltar para etapa 1 (GET — reexibe formulário de identificação) -->
+                <a class="btn btn-outline-secondary" href="{{ url_for('visitor.wizard') }}">
+                  Voltar para etapa 1
+                </a>
+              </div>
+
+              <!-- Aviso sobre possíveis bloqueios de câmera (antivírus / HTTPS) -->
+              <div class="alert alert-warning mt-3 mb-0">
+                Se a câmera não abrir, desative o Kaspersy Endpoint Security, caso o erro persista, abra o navegador em localhost.
+              </div>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- ===========================================================
+         ETAPA 3 — Local / Destino
+         Campo único: destino (setor, sala ou pessoa a ser visitada).
+         Ao submeter, o sistema finaliza o cadastro do visitante E
+         registra automaticamente o check-in (entrada) da visita.
+         POST → visitor.wizard_finish
+         =========================================================== -->
     {% if wizard.step == 3 %}
-    <!-- Etapa 3 -->
     <div class="sheet">
       <div class="sheet-header">
         <div>
@@ -213,17 +284,21 @@
       <div class="p-3 p-md-4">
         <form method="post" action="{{ url_for('visitor.wizard_finish') }}">
           <div class="row g-3 align-items-end">
+
+            <!-- Destino (obrigatório) — texto livre para setor/sala/pessoa -->
             <div class="col-12 col-md-8">
               <label class="form-label">Local / Pessoa / Setor</label>
               <input class="form-control form-control-lg" name="destination" required placeholder="Ex: Seção de Pessoal / Sala X / Sgt Fulano">
             </div>
 
+            <!-- Botão de finalização — cadastra visitante + registra check-in -->
             <div class="col-12 col-md-4">
               <button class="btn btn-success btn-lg w-100" type="submit">
                 Finalizar e Registrar Entrada
               </button>
             </div>
 
+            <!-- Voltar para etapa anterior -->
             <div class="col-12">
               <a class="btn btn-outline-secondary" href="{{ url_for('visitor.wizard') }}">Voltar</a>
             </div>
@@ -237,8 +312,12 @@
 </div>
 {% endblock %}
 
+<!-- ─────────────────────────────────────────────────────────────────
+     Scripts — camera.js
+     Controla a webcam na etapa 2: ativar/desativar stream, capturar
+     snapshot, gerar Data URL (base64) e habilitar botão "Próximo".
+     Expõe a função ensurePhoto() usada no onsubmit do formulário.
+     ───────────────────────────────────────────────────────────────── -->
 {% block scripts %}
-
 <script src="/static/js/camera.js"></script>
-
 {% endblock %}

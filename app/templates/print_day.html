@@ -1,3 +1,38 @@
+<!-- =================================================================
+  templates/print_day.html
+  Relatório Imprimível — Registro diário de entrada e saída de
+  visitantes em formato A4, otimizado para impressão (WeasyPrint
+  ou window.print do navegador).
+
+  IMPORTANTE: Este template NÃO herda de base.html.
+  É um documento HTML standalone com estilos próprios de impressão,
+  sem navbar, footer ou dependências do Bootstrap.
+
+  Variáveis de contexto esperadas:
+    visits       (list[Visit]) — Lista de visitas do dia, cada uma
+                   com: check_in, check_out, destination,
+                   visitor.name, visitor.phone, visitor.cpf
+    today        (date)        — Data de referência do relatório
+    generated_at (datetime|None) — Timestamp de geração; se None,
+                   um fallback JS preenche no navegador
+
+  Estrutura do documento impresso:
+    1. Cabeçalho institucional (Ministério da Defesa / EB / GUEs)
+    2. Metadados (data, geração, total de visitas)
+    3. Tabela de visitas (status, horários, tempo, dados, destino)
+    4. Bloco de conferência (nome, posto, assinatura)
+    5. Vistos (Of Dia, Adj Of Dia, Cmt Gda)
+
+  Recursos de impressão:
+    - @page A4 com margens de 12mm
+    - Numeração automática "Página X de Y" no rodapé
+    - Timestamp de geração no rodapé esquerdo
+    - Cabeçalho da tabela repete em cada página (table-header-group)
+    - Linhas não quebram no meio (page-break-inside: avoid)
+    - Bloco de assinatura nunca é quebrado entre páginas
+    - Elementos com classe .no-print são ocultados na impressão
+================================================================= -->
+
 <!doctype html>
 <html lang="pt-br">
 <head>
@@ -5,244 +40,49 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Documento interno - Registro de visitantes</title>
 
-<style>
-@page {
-  @bottom-left {
-    content: "Gerado em: {{ generated_at.strftime('%d/%m/%Y %H:%M') }}";
-    /* resto... */
-  }
-}
-</style>
-
-<style>
-  @page {
-  size: A4;
-  margin: 12mm;
-
-  @bottom-center {
-    content: "Página " counter(page) " / " counter(pages);
-    font-family: Arial, Helvetica, sans-serif;
-    font-size: 10px;
-    color: #111;
-  }
-
-    @bottom-left {
-    content: "Gerado em: {{ generated_at.strftime('%d/%m/%Y %H:%M') }}";
-    font-family: Arial, Helvetica, sans-serif;
-    font-size: 9px;
-    color: #666;
-  }
-
-}
-
-:root{
-  --line: #8a8a8a;
-  --gray-1: #f3f3f3;
-  --gray-2: #ffffff;
-  --text: #111;
-}
-
-body{
-  font-family: Arial, Helvetica, sans-serif;
-  color: var(--text);
-  font-size: 11px;
-}
-
-.mono{ font-family: "Courier New", Courier, monospace; }
-.center{ text-align:center; }
-.right{ text-align:right; }
-
-.doc-header{
-  text-align: center;
-  margin-top: 6px;
-  margin-bottom: 10px;
-}
-.inst-line{
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: .05em;
-  font-size: 11px;
-  margin: 2px 0;
-}
-.doc-title{
-  margin: 10px 0 6px 0;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: .03em;
-  font-size: 24px;
-}
-
-/* tabela */
-table{ width:100%; border-collapse: collapse; }
-th, td{
-  border: 1px solid var(--line);
-  padding: 2px 6px;
-  line-height: 1.15;
-  vertical-align: middle;
-}
-thead{ display: table-header-group; }
-thead th{
-  background: #e9e9e9;
-  font-weight: 700;
-  text-align: left;
-}
-tbody tr:nth-child(odd){ background: var(--gray-2); }
-tbody tr:nth-child(even){ background: var(--gray-1); }
-
-tr{ page-break-inside: avoid; }
-
-.status-col{ width: 18px; text-align:center; }
-.time-col{ width: 62px; text-align:center; }
-.dur-col{ width: 84px; text-align:center; }
-.cpf-col{ width: 120px; text-align:center; }
-
-.status-dot{
-  display:inline-block;
-  width: 10px; height: 10px;
-  border-radius: 50%;
-  border: 1px solid #2a2a2a;
-  background: #ce1919;
-}
-.status-empty{
-  display:inline-block;
-  width: 10px; height: 10px;
-  border-radius: 50%;
-  border: 1px solid #888;
-  background: transparent;
-}
-
-.name-wrap{
-  display:flex;
-  align-items:center;
-  gap:6px;
-}
-.open-icon{
-  font-weight:700;
-  color:#ce1919;
-  width:14px;
-  display:inline-block;
-  text-align:center;
-}
-
-/* meta dentro do thead (repete) */
-.meta-row th{
-  border: 1px solid #000;
-  padding: 6px 8px;
-  background: #fff;
-  font-weight: 400;
-}
-.meta-grid{
-  display:flex;
-  justify-content: space-between;
-  gap:12px;
-  font-size:10.5px;
-}
-.meta-right{
-  margin-left:auto;
-  text-align:right;
-  white-space:nowrap;
-}
-
-/* Conferência + Vistos */
-.conf-block{
-  width: 100%;
-  margin-top: 14mm;
-  display: flex;
-  justify-content: center;
-  page-break-inside: avoid;
-}
-.conf-inner{
-  width: 180mm;
-  font-size: 11px;
-}
-.conf-title{
-  font-weight:700;
-  margin-bottom:6px;
-  text-transform: uppercase;
-}
-.conf-lines{
-  display:grid;
-  gap:6px;
-  margin-bottom:12mm;
-}
-.conf-line{
-  display:flex;
-  align-items:baseline;
-  gap:6px;
-}
-.conf-line .lbl{ min-width:85px; }
-.conf-line .fill{
-  flex:1;
-  border-bottom:1px solid #757575;
-  height:0.9em;
-}
-.vistos{
-  display:flex;
-  justify-content: space-between;
-  gap:10mm;
-}
-.visto{
-  width:55mm;
-  border:1px solid #757575;
-  padding:6mm 5mm;
-  text-align:center;
-  box-sizing:border-box;
-}
-.visto-line{
-  border-top:2px solid #000;
-  margin:10mm auto 4mm auto;
-  width:100%;
-}
-.visto-label{ font-weight:700; margin-top:2mm; }
-
-
-</style>
-
-<style>
-  @page { 
-    size: A4; 
-    margin: 12mm 12mm 20mm 12mm; /* espaço rodapé páginas */
-  }
-  
-  /* CRÍTICO: Assinatura SEM quebra página */
-  .signature-block {
-    margin-top: 15px;           /* espaço pequeno após tabela */
-    page-break-inside: avoid;   /* NÃO quebra assinatura */
-    page-break-before: avoid;   /* NÃO quebra ANTES */
-    page-break-after: avoid;    /* NÃO quebra DEPOIS */
-  }
-  
-  /* Tabela não quebra linha no meio */
-  table { page-break-inside: auto; }
-  tr { page-break-inside: avoid; page-break-after: auto; }
-  thead { display: table-header-group; } /* cabeçalho repete */
-  
-  /* NÚMEROS PÁGINAS rodapé AUTOMÁTICO */
-  @page {
-    @bottom-center {
-      content: "Página " counter(page) " de " counter(pages);
-      font-size: 10px; font-weight: bold;
-      border-top: 1px solid #333; padding-top: 3px;
-    }
-  }
-  
-  /* Preview tela */
-  .page-indicator {
-    position: fixed; bottom: 10px; left: 10px; 
-    background: #007cba; color: white; padding: 8px; 
-    border-radius: 5px; font-size: 12px; font-weight: bold;
-  }
-</style>
-
-
+  <!-- ===========================================================
+       CSS de Impressão — Configuração @page (A4)
+       Rodapé automático com numeração de páginas e data de geração.
+       =========================================================== -->
   <style>
-    @page { size: A4; margin: 12mm; }
+    @page {
+      size: A4;
+      margin: 12mm 12mm 20mm 12mm; /* margem inferior maior para rodapé */
 
+      /* Rodapé central: numeração de páginas */
+      @bottom-center {
+        content: "Página " counter(page) " de " counter(pages);
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: 10px;
+        font-weight: bold;
+        color: #111;
+        border-top: 1px solid #333;
+        padding-top: 3px;
+      }
+
+      /* Rodapé esquerdo: timestamp de geração */
+      @bottom-left {
+        content: "Gerado em: {{ generated_at.strftime('%d/%m/%Y %H:%M') if generated_at else '' }}";
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: 9px;
+        color: #666;
+      }
+    }
+  </style>
+
+  <!-- ===========================================================
+       CSS Principal — Estilos do documento imprimível
+       =========================================================== -->
+  <style>
+
+    /* ===========================================================
+       Variáveis CSS — Paleta do documento
+       =========================================================== */
     :root{
-      --line: #8a8a8a;
-      --gray-1: #f3f3f3;
-      --gray-2: #ffffff;
-      --text: #111;
+      --line: #8a8a8a;      /* cor das bordas da tabela */
+      --gray-1: #f3f3f3;    /* linhas pares (zebra) */
+      --gray-2: #ffffff;    /* linhas ímpares */
+      --text: #111;         /* cor do texto principal */
     }
 
     body{
@@ -251,7 +91,17 @@ tr{ page-break-inside: avoid; }
       font-size: 11px;
     }
 
-    /* Barra superior (não imprime) */
+    /* ===========================================================
+       Utilitários tipográficos
+       =========================================================== */
+    .mono{ font-family: "Courier New", Courier, monospace; }
+    .center{ text-align: center; }
+    .right{ text-align: right; }
+
+    /* ===========================================================
+       Barra de ações (tela) — Oculta na impressão via .no-print
+       Botões: Voltar (relatório) e Imprimir (window.print)
+       =========================================================== */
     .topbar{
       display: flex;
       justify-content: space-between;
@@ -281,11 +131,14 @@ tr{ page-break-inside: avoid; }
     }
     .btn-outline-dark:hover{ background: #f2f2f2; }
 
+    /* Classe utilitária: oculta elementos na impressão (botões, indicadores) */
     @media print{
-      .no-print{ display:none !important; }
+      .no-print{ display: none !important; }
     }
 
-    /* Cabeçalho do documento */
+    /* ===========================================================
+       Cabeçalho Institucional — Ministério da Defesa / EB / GUEs
+       =========================================================== */
     .doc-header{
       text-align: center;
       margin-top: 6px;
@@ -309,7 +162,6 @@ tr{ page-break-inside: avoid; }
       font-size: 11px;
       margin: 2px 0;
     }
-
     .doc-title{
       margin: 10px 0 6px 0;
       font-weight: 700;
@@ -318,6 +170,9 @@ tr{ page-break-inside: avoid; }
       font-size: 20px;
     }
 
+    /* ===========================================================
+       Metadados — Faixa entre bordas com data, geração e total
+       =========================================================== */
     .doc-meta{
       display: flex;
       justify-content: space-between;
@@ -328,12 +183,15 @@ tr{ page-break-inside: avoid; }
       margin: 8px 0 10px 0;
       font-size: 10.5px;
     }
-    .mono{ font-family: "Courier New", Courier, monospace; }
 
-    /* Tabela */
+    /* ===========================================================
+       Tabela de Visitas — Listagem principal do relatório
+       Colunas: Status | Entrada | Saída | Tempo | Nome | Tel | CPF | Destino
+       =========================================================== */
     table{
       width: 100%;
       border-collapse: collapse;
+      page-break-inside: auto;         /* permite quebra entre linhas */
     }
     th, td{
       border: 1px solid var(--line);
@@ -341,37 +199,49 @@ tr{ page-break-inside: avoid; }
       line-height: 1.15;
       vertical-align: middle;
     }
+
+    /* Cabeçalho da tabela repete em cada página impressa */
+    thead{ display: table-header-group; }
     thead th{
       background: #e9e9e9;
       font-weight: 700;
       text-align: left;
     }
+
+    /* Zebra striping: alternância de cores nas linhas */
     tbody tr:nth-child(odd){ background: var(--gray-2); }
     tbody tr:nth-child(even){ background: var(--gray-1); }
 
-    .center{ text-align:center; }
-    .right{ text-align:right; }
+    /* Evita quebra de página no meio de uma linha da tabela */
+    tr{ page-break-inside: avoid; page-break-after: auto; }
 
-    .status-col{ width: 18px; text-align:center; }
-    .time-col{ width: 62px; text-align:center; }
-    .dur-col{ width: 84px; text-align:center; }
-    .cpf-col{ width: 120px; text-align:center; }
+    /* Larguras fixas das colunas especiais */
+    .status-col{ width: 18px; text-align: center; }   /* bolinha de status */
+    .time-col{ width: 62px; text-align: center; }     /* entrada / saída */
+    .dur-col{ width: 84px; text-align: center; }      /* duração / telefone */
+    .cpf-col{ width: 120px; text-align: center; }     /* CPF formatado */
 
+    /* ===========================================================
+       Indicadores de Status da Visita
+       - status-dot (vermelho): visitante ainda no aquartelamento
+       - status-empty (oco): visita finalizada (check-out realizado)
+       =========================================================== */
     .status-dot{
-      display:inline-block;
+      display: inline-block;
       width: 10px; height: 10px;
       border-radius: 50%;
       border: 1px solid #2a2a2a;
-      background: #ce1919; /* vermelho */
+      background: #ce1919;            /* vermelho = visita em aberto */
     }
     .status-empty{
-      display:inline-block;
+      display: inline-block;
       width: 10px; height: 10px;
       border-radius: 50%;
       border: 1px solid #888;
-      background: transparent;
+      background: transparent;        /* vazio = visita finalizada */
     }
 
+    /* Nome do visitante com ícone de alerta para visitas abertas */
     .name-wrap{
       display: flex;
       align-items: center;
@@ -379,7 +249,7 @@ tr{ page-break-inside: avoid; }
     }
     .open-icon{
       font-weight: 700;
-      color: #ce1919; /* vermelho */
+      color: #ce1919;                 /* vermelho = alerta visual */
       width: 14px;
       display: inline-block;
       text-align: center;
@@ -392,53 +262,135 @@ tr{ page-break-inside: avoid; }
       padding-top: 6px;
     }
 
-  /* Assinatura (independente do Bootstrap) */
-  .signature-block{
-    width: 100%;
-    margin-top: 18mm;              /* espaço antes da assinatura (bom p/ A4) */
-    display: flex;
-    justify-content: center;       /* centraliza no meio da página */
-    page-break-inside: avoid;      /* evita quebrar no meio ao imprimir */
-  }
-  .signature-inner{
-    width: 120mm;                  /* “caixa” central (ajuste se quiser) */
-    text-align: center;
-  }
-  .signature-line{
-    width: 70mm;                   /* linha curta para assinar (ajuste) */
-    margin: 0 auto;
-    border-top: 2px solid #000;    /* linha visível na impressão */
-    height: 0;
-  }
-  .signature-name{
-    margin-top: 6px;
-    font-weight: 700;
-    text-transform: uppercase;
-  }
-  .signature-role{
-    font-size: 11px;
-  }
+    /* ===========================================================
+       Bloco de Conferência — Campos para preenchimento manual
+       (nome, posto/graduação, assinatura do responsável)
+       =========================================================== */
+    .conf-block{
+      width: 100%;
+      margin-top: 14mm;
+      display: flex;
+      justify-content: center;
+      page-break-inside: avoid;        /* nunca quebra no meio */
+    }
+    .conf-inner{
+      width: 180mm;
+      font-size: 11px;
+    }
+    .conf-title{
+      font-weight: 700;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+    }
+    .conf-lines{
+      display: grid;
+      gap: 6px;
+      margin-bottom: 12mm;
+    }
+    .conf-line{
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+    }
+    .conf-line .lbl{ min-width: 85px; }
+    .conf-line .fill{
+      flex: 1;
+      border-bottom: 1px solid #757575;  /* linha para escrita manual */
+      height: 0.9em;
+    }
 
+    /* ===========================================================
+       Vistos — Campos de assinatura para autoridades
+       Of Dia | Adj Of Dia | Cmt Gda
+       =========================================================== */
+    .vistos{
+      display: flex;
+      justify-content: space-between;
+      gap: 10mm;
+    }
+    .visto{
+      width: 55mm;
+      border: 1px solid #757575;
+      padding: 6mm 5mm;
+      text-align: center;
+      box-sizing: border-box;
+    }
+    .visto-line{
+      border-top: 2px solid #000;
+      margin: 10mm auto 4mm auto;
+      width: 100%;
+    }
+    .visto-label{ font-weight: 700; margin-top: 2mm; }
+
+    /* ===========================================================
+       Bloco de Assinatura — Nunca quebra entre páginas
+       =========================================================== */
+    .signature-block{
+      margin-top: 15px;
+      page-break-inside: avoid;
+      page-break-before: avoid;
+      page-break-after: avoid;
+    }
+    .signature-inner{
+      width: 120mm;
+      text-align: center;
+    }
+    .signature-line{
+      width: 70mm;
+      margin: 0 auto;
+      border-top: 2px solid #000;
+      height: 0;
+    }
+    .signature-name{
+      margin-top: 6px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    .signature-role{
+      font-size: 11px;
+    }
+
+    /* ===========================================================
+       Indicador de Preview (somente tela) — Mostra estimativa de
+       páginas (~25 linhas/página) no canto inferior esquerdo.
+       Oculto na impressão via classe .no-print.
+       =========================================================== */
+    .page-indicator{
+      position: fixed; bottom: 10px; left: 10px;
+      background: #007cba; color: white; padding: 8px;
+      border-radius: 5px; font-size: 12px; font-weight: bold;
+    }
   </style>
 </head>
 
 <body>
-  <!-- Topbar com botões -->
+
+  <!-- ─────────────────────────────────────────────────────────────
+       Barra de Ações (somente tela) — Voltar ao relatório e imprimir.
+       Ocultada na impressão pela classe .no-print.
+       ───────────────────────────────────────────────────────────── -->
   <div class="topbar no-print">
     <a class="btn btn-outline-dark" href="{{ url_for('visitor.report_today') }}">Voltar</a>
     <button class="btn btn-outline-gray" onclick="window.print()">Imprimir</button>
   </div>
 
-  <!-- Cabeçalho institucional -->
+  <!-- ─────────────────────────────────────────────────────────────
+       Cabeçalho Institucional — Hierarquia militar
+       Ministério da Defesa → Exército Brasileiro → GUEs/9ª Bda Inf Mtz
+       ───────────────────────────────────────────────────────────── -->
   <div class="doc-header">
-
     <div class="inst-line">Ministério da Defesa</div>
     <div class="inst-line">Exército Brasileiro</div>
     <div class="inst-line">Grupamento de Unidades Escola / 9ª Brigada de Infantaria Motorizada</div>
-
     <div class="doc-title">Registro de entrada e saída de visitantes</div>
   </div>
 
+  <!-- ─────────────────────────────────────────────────────────────
+       Macro Jinja: dur_hms
+       Calcula a duração entre check_in e check_out e retorna no
+       formato HH:MM:SS. Retorna "- -" se não houver check_out
+       (visita ainda em aberto).
+       ───────────────────────────────────────────────────────────── -->
   {% macro dur_hms(check_in, check_out) -%}
     {% if check_out %}
       {% set total = (check_out - check_in).total_seconds() | int %}
@@ -451,6 +403,12 @@ tr{ page-break-inside: avoid; }
     {% endif %}
   {%- endmacro %}
 
+  <!-- ─────────────────────────────────────────────────────────────
+       Metadados do Documento — Data de referência, timestamp de
+       geração e contagem total de visitas do dia.
+       Se generated_at não for passado pelo backend, o fallback JS
+       preenche o campo no navegador (ver script no final).
+       ───────────────────────────────────────────────────────────── -->
   <div class="doc-meta">
     <div>
       Data do documento:
@@ -462,6 +420,7 @@ tr{ page-break-inside: avoid; }
       {% if generated_at %}
         <span class="mono">{{ generated_at.strftime("%d/%m/%Y %H:%M") }}</span>
       {% else %}
+        <!-- Placeholder preenchido via JavaScript caso generated_at seja None -->
         <span class="mono" id="generatedAt">--/--/---- --:--</span>
       {% endif %}
     </div>
@@ -472,6 +431,18 @@ tr{ page-break-inside: avoid; }
     </div>
   </div>
 
+  <!-- ─────────────────────────────────────────────────────────────
+       Tabela de Visitas — Listagem completa do dia
+       Colunas:
+         - Status   — Bolinha vermelha (aberta) ou vazia (finalizada)
+         - Entrada  — Horário de check-in (HH:MM:SS)
+         - Saída    — Horário de check-out ou "- -"
+         - Tempo    — Duração calculada via macro dur_hms
+         - Nome     — Com ícone "!!" se visita ainda aberta
+         - Telefone — Celular do visitante
+         - CPF      — Documento formatado
+         - Destino  — Local/pessoa visitada
+       ───────────────────────────────────────────────────────────── -->
   <table>
     <thead>
       <tr>
@@ -489,6 +460,7 @@ tr{ page-break-inside: avoid; }
     <tbody>
       {% for v in visits %}
       <tr>
+        <!-- Coluna de status: dot vermelho = aberta, vazio = finalizada -->
         <td class="status-col">
           {% if not v.check_out %}
             <span class="status-dot" title="Ainda no aquartelamento">X</span>
@@ -497,15 +469,20 @@ tr{ page-break-inside: avoid; }
           {% endif %}
         </td>
 
+        <!-- Horários de entrada e saída (monospace para alinhamento) -->
         <td class="mono center">{{ v.check_in.strftime("%H:%M:%S") }}</td>
         <td class="mono center">{% if v.check_out %}{{ v.check_out.strftime("%H:%M:%S") }}{% else %}--{% endif %}</td>
+
+        <!-- Duração calculada pela macro dur_hms -->
         <td class="mono center">{{ dur_hms(v.check_in, v.check_out) }}</td>
 
+        <!-- Nome do visitante com alerta visual para visitas abertas -->
         <td>
           <div class="name-wrap">
             {% if not v.check_out %}
               <span class="open-icon" title="Ainda não se retirou">!!</span>
             {% else %}
+              <!-- Espaçador invisível para manter alinhamento uniforme -->
               <span class="open-icon" style="visibility:hidden;">!!</span>
             {% endif %}
             <span>{{ v.visitor.name }}</span>
@@ -520,11 +497,16 @@ tr{ page-break-inside: avoid; }
     </tbody>
   </table>
 
-    <!-- Assinatura (nova página automática) -->
-    <div class="conf-block">
+  <!-- ─────────────────────────────────────────────────────────────
+       Bloco de Conferência — Preenchimento manual pelo responsável
+       da portaria (nome, posto/graduação, assinatura).
+       Nunca quebra entre páginas (page-break-inside: avoid).
+       ───────────────────────────────────────────────────────────── -->
+  <div class="conf-block">
     <div class="conf-inner">
       <div class="conf-title">Responsável pela conferência:</div>
 
+      <!-- Linhas de preenchimento manual (impressas com underline) -->
       <div class="conf-lines">
         <div class="conf-line">
           <span class="lbl">Nome:</span><span class="fill"></span>
@@ -537,6 +519,12 @@ tr{ page-break-inside: avoid; }
         </div>
       </div>
 
+      <!-- ─────────────────────────────────────────────────────────
+           Vistos — Campos de assinatura das autoridades de serviço:
+             - Oficial de Dia
+             - Adjunto do Oficial de Dia
+             - Comandante da Guarda
+           ───────────────────────────────────────────────────────── -->
       <div class="vistos">
         <div class="visto">
           <div class="visto-line"></div>
@@ -552,24 +540,25 @@ tr{ page-break-inside: avoid; }
         </div>
       </div>
     </div>
-
   </div>
-</div>
 
-<!-- Preview páginas (só tela) -->
-<div class="page-indicator no-print">
-📄 {{ visits|length }} visitas | Impressão: {{ visits|length//25 + 1 }} páginas estimadas
-</div>
-<!-- 
-  <div class="print-date">
-  Gerado em: {{ generated_at.strftime('%d/%m/%Y %H:%M') }}
-  </div> -->
+  <!-- ─────────────────────────────────────────────────────────────
+       Indicador de Preview (somente tela) — Mostra quantidade de
+       visitas e estimativa de páginas (~25 linhas/página).
+       Oculto na impressão via classe .no-print.
+       ───────────────────────────────────────────────────────────── -->
+  <div class="page-indicator no-print">
+    📄 {{ visits|length }} visitas | Impressão: {{ visits|length//25 + 1 }} páginas estimadas
+  </div>
 
-
-
+  <!-- ─────────────────────────────────────────────────────────────
+       Script Fallback — Preenche o campo "Gerado em" via JavaScript
+       caso o backend não tenha passado a variável generated_at.
+       Usa a data/hora local do navegador do usuário.
+       Oculto na impressão via classe .no-print no <script>.
+       ───────────────────────────────────────────────────────────── -->
   {% if not generated_at %}
   <script class="no-print">
-    // fallback caso você não passe generated_at pelo backend
     (function(){
       const el = document.getElementById("generatedAt");
       if(!el) return;

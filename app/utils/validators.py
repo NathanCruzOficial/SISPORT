@@ -1,18 +1,53 @@
+# =====================================================================
+# validators.py
+# Módulo de Validações — Reúne funções utilitárias para normalização
+# e validação de CPF, telefone e e-mail. Utilizado como camada de
+# verificação antes da persistência de dados no sistema.
+# =====================================================================
+
+# ─────────────────────────────────────────────────────────────────────
+# Imports
+# ─────────────────────────────────────────────────────────────────────
 import re
 import unicodedata
 
-'''
-VALIDAÇÃO DE CPF E TELEFONE
-'''
+
+# =====================================================================
+# Funções — Normalização e Validação de Telefone
+# =====================================================================
 
 def normalize_phone(value: str) -> str:
+    """
+    Remove todos os caracteres não numéricos de um telefone.
+
+    :param value: (str) Telefone com ou sem formatação.
+    :return: (str) Apenas os dígitos do telefone. Ex: '(21) 99999-0000' → '21999990000'.
+    """
     return re.sub(r"\D", "", value or "")
 
+
+# =====================================================================
+# Funções — Normalização e Validação de CPF
+# =====================================================================
+
 def normalize_cpf(value: str) -> str:
-    """Retorna CPF apenas com dígitos. Ex: '123.456.789-09' -> '12345678909'."""
+    """
+    Remove todos os caracteres não numéricos de um CPF.
+
+    :param value: (str) CPF com ou sem formatação.
+    :return: (str) Apenas os dígitos do CPF. Ex: '123.456.789-09' → '12345678909'.
+    """
     return re.sub(r"\D", "", value or "")
 
 def is_valid_cpf(value: str) -> bool:
+    """
+    Valida um CPF utilizando o algoritmo oficial dos dígitos verificadores.
+    Rejeita sequências repetidas (ex: '111.111.111-11') e CPFs com
+    tamanho diferente de 11 dígitos.
+
+    :param value: (str) CPF a ser validado (com ou sem formatação).
+    :return: (bool) True se o CPF for válido, False caso contrário.
+    """
     cpf = normalize_cpf(value)
 
     # Precisa ter 11 dígitos
@@ -36,11 +71,13 @@ def is_valid_cpf(value: str) -> bool:
     return cpf[-2:] == f"{d1}{d2}"
 
 
-'''
-VALIDAÇÃO DE EMAIL
-'''
+# =====================================================================
+# Variáveis Globais — Regex de E-mail
+# =====================================================================
 
-
+# Expressão regular compilada para validação de e-mail conforme RFC 5321.
+# Verifica tamanho total (≤254), local-part (≤64), caracteres permitidos
+# e estrutura do domínio (ao menos um ponto, sem hífen no início/fim).
 _EMAIL_RE = re.compile(
     r"^(?=.{1,254}$)"                    # tamanho total
     r"(?=.{1,64}@)"                      # local-part <= 64
@@ -53,8 +90,19 @@ _EMAIL_RE = re.compile(
     r"$"
 )
 
+
+# =====================================================================
+# Funções — Normalização e Validação de E-mail
+# =====================================================================
+
 def normalize_email(raw: str) -> str:
-    """Normaliza e-mail para validação/armazenamento."""
+    """
+    Normaliza um e-mail para validação e armazenamento: remove espaços,
+    aplica normalização Unicode (NFKC) e converte para minúsculo.
+
+    :param raw: (str | None) E-mail bruto informado pelo usuário.
+    :return: (str) E-mail normalizado em minúsculo, ou string vazia se None.
+    """
     if raw is None:
         return ""
     s = str(raw).strip()
@@ -62,7 +110,14 @@ def normalize_email(raw: str) -> str:
     return s.lower()
 
 def is_valid_email(raw: str) -> bool:
-    """Validação prática e robusta para e-mails comuns."""
+    """
+    Valida um e-mail de forma prática e robusta. Verifica ausência de
+    espaços, pontos consecutivos, pontos no início/fim, conformidade
+    com a regex _EMAIL_RE e regras adicionais no domínio.
+
+    :param raw: (str) E-mail a ser validado.
+    :return: (bool) True se o e-mail for válido, False caso contrário.
+    """
     email = normalize_email(raw)
     if not email:
         return False
@@ -87,9 +142,13 @@ def is_valid_email(raw: str) -> bool:
 
 def validate_required_email(raw: str) -> str:
     """
-    Campo obrigatório:
-    - retorna o e-mail normalizado
-    - levanta ValueError com mensagem amigável se vazio/inválido
+    Valida um e-mail como campo obrigatório. Normaliza o valor e
+    verifica se é válido; caso contrário, levanta exceção com
+    mensagem amigável para o usuário.
+
+    :param raw: (str) E-mail bruto informado pelo usuário.
+    :return: (str) E-mail normalizado e validado.
+    :raises ValueError: Se o e-mail estiver vazio ou for inválido.
     """
     email = normalize_email(raw)
     if email == "":
@@ -97,4 +156,3 @@ def validate_required_email(raw: str) -> str:
     if not is_valid_email(email):
         raise ValueError("E-mail inválido. Verifique e tente novamente.")
     return email
-

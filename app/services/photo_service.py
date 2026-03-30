@@ -1,26 +1,72 @@
+# =====================================================================
+# photo_service.py
+# Módulo de Gerenciamento de Fotos de Visitantes — Responsável por
+# sanitizar o CPF para uso como nome de diretório, decodificar fotos
+# recebidas em formato Data URL (base64) e salvá-las (ou substituí-las)
+# no sistema de arquivos, organizadas por CPF do visitante.
+# =====================================================================
+
+# ─────────────────────────────────────────────────────────────────────
+# Imports
+# ─────────────────────────────────────────────────────────────────────
 import base64
 import os
 import re
 from flask import current_app
 
+
+# =====================================================================
+# Função — Sanitização de CPF para Nome de Diretório
+# =====================================================================
+
 def sanitize_cpf(cpf: str) -> str:
-    """Remove caracteres não numéricos do CPF (para pasta)."""
+    """
+    Remove todos os caracteres não numéricos do CPF, retornando
+    apenas os dígitos. Utilizado para gerar nomes de pasta seguros.
+
+    Exemplo: '123.456.789-00' → '12345678900'
+
+    :param cpf: (str) CPF com ou sem formatação.
+    :return: (str) Somente os dígitos do CPF (ou string vazia se nulo).
+    """
     return re.sub(r"\D+", "", cpf or "")
+
+
+# =====================================================================
+# Função — Salvamento / Substituição de Foto de Perfil
+# =====================================================================
 
 def save_or_replace_profile_photo(data_url: str, cpf: str) -> str:
     """
-    Salva (ou substitui) a foto do visitante em uploads/<cpf>/foto.jpg.
-    Retorna o caminho RELATIVO (ex.: '12345678900/foto.jpg').
+    Decodifica uma foto em formato Data URL (base64) e salva no disco,
+    substituindo qualquer foto anterior do mesmo visitante.
+
+    Estrutura de armazenamento:
+        UPLOAD_FOLDER/<cpf_sanitizado>/foto.jpg
+        Exemplo: uploads/12345678900/foto.jpg
+
+    Fluxo:
+    1. Valida a presença do separador ',' na Data URL.
+    2. Extrai o header e o payload base64 (sempre salva como .jpg).
+    3. Sanitiza o CPF para uso como nome de diretório.
+    4. Cria a pasta do visitante dentro de UPLOAD_FOLDER (se necessário).
+    5. Decodifica os bytes e sobrescreve o arquivo no disco.
+    6. Retorna o caminho relativo para armazenamento no banco.
+
+    :param data_url: (str) Foto em formato Data URL base64
+                     (ex: 'data:image/jpeg;base64,/9j/4AAQ...').
+    :param cpf:      (str) CPF do visitante (com ou sem formatação).
+    :return: (str) Caminho relativo da foto salva (ex: '12345678900/foto.jpg').
+    :raises ValueError: Se a Data URL for ausente/inválida ou o CPF for vazio.
     """
     if not data_url or "," not in data_url:
         raise ValueError("Foto inválida (data URL ausente).")
 
     header, b64data = data_url.split(",", 1)
 
-    # Vamos padronizar para jpg (mais leve).
+    # Padroniza para jpg (mais leve), independentemente do tipo original.
     ext = "jpg"
     if "image/png" in header:
-        # Aceita png, mas ainda salvaremos como jpg se quiser (aqui manteremos jpg).
         ext = "jpg"
 
     cpf_dir = sanitize_cpf(cpf)
