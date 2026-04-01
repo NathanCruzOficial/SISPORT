@@ -48,9 +48,7 @@ jobs:
 
       - name: Verify installer was created
         run: |
-          if (!(Test-Path "installer\installer_output\*.exe")) {
-            Write-Error "Installer not found in installer_output/"
-            exit 1
+           if (-not (Test-Path "installer\installer_output\*.exe")) { Write-Error "Installer not found!"; exit 1 }
 
       - name: Upload installer
         uses: softprops/action-gh-release@v2
