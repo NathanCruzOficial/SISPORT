@@ -128,12 +128,19 @@ def check_and_offer_update(current_version: str, repo: str, app_name: str) -> No
              a atualização; caso contrário, retorna normalmente.
     """
     try:
+        if current_version == "dev":
+            print("[Updater]: Você está em versão de desenvolvedor.")
+            return  # Ignora atualização em ambiente de desenvolvimento
+        
         rel = _get_latest_release(repo)
         latest = (rel.get("tag_name") or "").lstrip("v").strip()
         if not latest:
+            print("[Updater]: Versão mais recente não encontrada.")
             return
+        print("[Updater]: Nova atualização detectada!")
 
         if version.parse(latest) <= version.parse(current_version):
+            print("[Updater]: Você já está usando a versão mais recente.")
             return
 
         msg = (
@@ -144,7 +151,10 @@ def check_and_offer_update(current_version: str, repo: str, app_name: str) -> No
         )
 
         if not _ask_yes_no("Atualização disponível", msg):
+            print("[Updater]: Usuário escolheu não atualizar o sistema.")
             return
+        
+        print("[Updater]: atualizando o sistema. Por favor, aguarde.")
 
         asset = _pick_installer_asset(rel)
         installer_url = asset["browser_download_url"]
@@ -152,7 +162,7 @@ def check_and_offer_update(current_version: str, repo: str, app_name: str) -> No
         installer_path = _download_to_updates(installer_url, file_name)
 
         # Executa o instalador em modo normal (vai perguntar pasta, permissões, etc.)
-        subprocess.Popen([installer_path, "/VERYSILENT", "/NORESTART"], shell=False)
+        subprocess.Popen([installer_path], shell=False)
         time.sleep(1)
         sys.exit(0)
 

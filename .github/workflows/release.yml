@@ -19,6 +19,16 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Get version from tag
+        id: version
+        shell: bash
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Set version in version.py
+        shell: bash
+        run: |
+          echo '__version__ = "${{ steps.version.outputs.VERSION }}"' > app/version.py
+
       - name: Install deps
         run: |
           python -m pip install --upgrade pip
@@ -26,15 +36,25 @@ jobs:
           pip install pyinstaller
 
       - name: Build (PyInstaller)
-        run: pyinstaller sisport.spec
+        run: pyinstaller package/sisport.spec
 
       - name: Install Inno Setup
         run: choco install innosetup -y
 
+      - name: Run tests
+        run: pytest
+
       - name: Build installer
-        run: iscc installer/sisport.iss
+        run: |
+          iscc /DAppVersion="${{ steps.version.outputs.VERSION }}" installer/sisport.iss
+
+      - name: Verify installer was created
+        run: |
+          if (!(Test-Path "installer\installer_output\*.exe")) {
+            Write-Error "Installer not found in installer_output/"
+            exit 1
 
       - name: Upload installer
         uses: softprops/action-gh-release@v2
         with:
-          files: installer_output/*.exe
+          files: installer/installer_output/*.exe

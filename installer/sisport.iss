@@ -1,5 +1,8 @@
 #define AppName "SISPORT"
-#define AppVersion "1.1.0"
+
+#ifndef AppVersion
+  #define AppVersion "development"
+#endif
 #define AppPublisher "Nathan Cruz"
 #define AppExeName "sisport.exe"
 #define BuildDir "../dist\\sisport"
