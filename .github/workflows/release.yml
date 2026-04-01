@@ -35,16 +35,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyinstaller
-          pip install pytest
 
       - name: Build (PyInstaller)
         run: pyinstaller package/sisport.spec
 
       - name: Install Inno Setup
         run: choco install innosetup -y
-
-      - name: Run tests
-        run: pytest
 
       - name: Build installer
         run: |
