@@ -22,24 +22,18 @@ import ctypes
 import logging
 import platform
 import sys
-import os
 import threading
 import time
 import webbrowser
 
-from app.paths import APP_DIR, ensure_app_dirs, log_path
+from app.paths import APP_DIR, ensure_app_dirs, log_path, icon_path
+
 
 
 
 # ─── AppUserModelID (Desagrupa o sistema do python normal) ───
 if platform.system() == "Windows":
     ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("com.sisport.app")
-
-def resource_path(relative_path: str) -> str:
-    """Resolve caminho de recurso tanto em dev quanto no .exe empacotado."""
-    if getattr(sys, '_MEIPASS', False):
-        return os.path.join(sys._MEIPASS, relative_path)
-    return os.path.join(os.path.abspath('.'), relative_path)
 
 # =====================================================================
 # Inicialização de Pastas
@@ -85,6 +79,42 @@ log = logging.getLogger("sisport.launcher")
 HOST = "127.0.0.1"
 PORT = 5000
 
+
+# =====================================================================
+# Detecção de Isntância existente do sistema.
+# =====================================================================
+
+def _ensure_single_instance():
+    """
+    Garante que apenas uma instância da aplicação esteja rodando.
+    Usa um Named Mutex do Windows. Se já houver uma instância ativa,
+    exibe um aviso e encerra o processo.
+
+    :return: O handle do mutex (deve ser mantido em memória enquanto o app rodar).
+    """
+    if platform.system() != "Windows":
+        return None
+
+    mutex_name = "Global\\SISPORT_SINGLE_INSTANCE"
+    kernel32 = ctypes.windll.kernel32
+
+    ERROR_ALREADY_EXISTS = 183
+
+    mutex = kernel32.CreateMutexW(None, False, mutex_name)
+    last_error = ctypes.GetLastError()
+
+    if last_error == ERROR_ALREADY_EXISTS:
+        log.warning("Outra instância do SISPORT já está em execução.")
+        ctypes.windll.user32.MessageBoxW(
+            0,
+            "O SISPORT já está em execução!",
+            "SISPORT",
+            0x40  # MB_ICONINFORMATION
+        )
+        sys.exit(0)
+
+    log.info("Mutex adquirido — instância única confirmada.")
+    return mutex
 
 # =====================================================================
 # Funções — Detecção de Tecla (SHIFT) e Modo de Execução
@@ -242,7 +272,6 @@ def _run_webview_mode():
     log.info("Servidor pronto. Abrindo janela Webview.")
 
     # ✅ Caminho absoluto do ícone
-    icon_path = resource_path("icone.ico")
 
     webview.create_window(
         APP_NAME,
@@ -253,7 +282,7 @@ def _run_webview_mode():
         fullscreen=True,
     )
     webview.start(
-        icon=icon_path,  # ← ícone na taskbar e na janela
+        icon=icon_path(),  # ← ícone na taskbar e na janela
     )
 
     log.info("Janela Webview fechada. Encerrando.")
@@ -334,6 +363,9 @@ def main():
     log.info("Iniciando Sisport...")
     log.info(f"Dados em: {APP_DIR}")
     log.info(f"Log em:   {LOG_FILE}")
+
+    # ── Garante instância única ──
+    _mutex = _ensure_single_instance()
 
     browser_mode = _should_use_browser()
 

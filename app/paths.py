@@ -53,6 +53,47 @@ def _get_base_dir() -> Path:
     else:
         base = os.environ.get("XDG_DATA_HOME", str(Path.home() / ".local" / "share"))
         return Path(base) / APP_DIR_NAME
+    
+
+
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Localizadores dos arquivos do sistema
+# ─────────────────────────────────────────────────────────────────────
+
+# =====================================================================
+# Funções — Resolução de Recursos do Sistema (PyInstaller)
+# =====================================================================
+
+def resource_path(relative_path: str) -> str:
+    """
+    Resolve caminho de recurso do SISTEMA (somente leitura).
+    Arquivos empacotados pelo PyInstaller (_MEIPASS / _internal).
+
+    Em dev:   caminho relativo ao diretório de trabalho.
+    No .exe:  caminho dentro de _MEIPASS.
+
+    :param relative_path: (str) Caminho relativo (ex: 'static/img/icone.ico').
+    :return: (str) Caminho absoluto resolvido.
+    """
+    if getattr(sys, "_MEIPASS", False):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.abspath("."), relative_path)
+
+
+def icon_path() -> str:
+    """
+    Retorna o caminho absoluto do ícone da aplicação.
+    Funciona tanto em dev quanto no .exe empacotado.
+
+    Ajuste o caminho relativo conforme a estrutura do seu projeto.
+
+    :return: (str) Caminho do icone.ico.
+    """
+    return resource_path(os.path.join("icone.ico"))
+
+
 
 
 # ─────────────────────────────────────────────────────────────────────
