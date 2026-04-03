@@ -1,156 +1,291 @@
+{# ═══════════════════════════════════════════════════════════════════
+   visitor_edit.html — Edição de Visitante — SISPORT V1.1
+   Layout simplificado: foto à esquerda com câmera embutida,
+   campos editáveis à direita, ações no rodapé.
+   ═══════════════════════════════════════════════════════════════════ #}
+
 {% extends "base.html" %}
+
 {% block content %}
 <div class="center-card">
   <div class="card-body">
 
-    <div class="sheet">
-      <div class="sheet-header">
-        <div>
-          <h2>Ficha do Visitante</h2>
-          <div class="muted small">Edição de dados e foto</div>
-        </div>
-        <a class="btn btn-outline-secondary" href="{{ url_for('visitor.checkin_form', visitor_id=visitor.id) }}">
-          Voltar
-        </a>
+    {# ── Cabeçalho ──────────────────────────────────────────────── #}
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-start gap-2 mb-4">
+      <div>
+        <h1 class="h4 mb-1">Ficha do Visitante</h1>
+        <div class="muted">Edição de dados e foto</div>
       </div>
+      <a class="btn btn-outline-secondary"
+         href="{{ url_for('visitor.checkin_form', visitor_id=visitor.id) }}">
+        <i class="bi bi-arrow-left me-1"></i>Voltar
+      </a>
+    </div>
 
-      <div class="p-3 p-md-4">
-        <div class="row g-4">
-          <!-- Foto -->
-          <div class="col-12 col-lg-4">
-            <div class="mb-2 fw-semibold">Foto</div>
+    <div class="row g-4">
 
-            <div class="photo-box mb-3" style="width:160px;height:160px;">
+      {# ══════════════════════════════════════════════════════════════
+         Coluna Esquerda — Foto + Câmera + Badge
+         ══════════════════════════════════════════════════════════════ #}
+      <div class="col-12 col-lg-4">
+        <div class="sheet p-3 text-center">
+
+          {# ── Foto atual (esconde quando câmera abre) ───────────── #}
+          <div id="current-photo-wrapper">
+            <div class="photo-box mb-3 mx-auto" style="width:160px;height:160px;">
               {% if visitor.photo_rel_path %}
-                <img src="{{ url_for('visitor.uploaded_file', filename=visitor.photo_rel_path) }}?v={{ visitor.id }}" alt="Foto">
+                <img src="{{ url_for('visitor.uploaded_file', filename=visitor.photo_rel_path) }}?v={{ visitor.id }}"
+                     alt="Foto do visitante"
+                     class="w-100 h-100"
+                     style="object-fit: cover;">
               {% else %}
-                <img src="{{ url_for('static', filename='img/avatar-placeholder.jpg') }}" alt="Sem foto">
+                <img src="{{ url_for('static', filename='img/avatar-placeholder.jpg') }}"
+                     alt="Sem foto"
+                     class="w-100 h-100 opacity-50"
+                     style="object-fit: cover;">
               {% endif %}
             </div>
 
-            <form method="post" action="{{ url_for('visitor.visitor_update_photo', visitor_id=visitor.id) }}">
-              <input type="hidden" name="photo_data_url" id="photo_data_url">
-
-              <div class="d-grid gap-2">
-                <button type="button" class="btn btn-outline-success" id="btnOpenCam">
-                  <i class="bi bi-camera-video me-1"></i>Abrir câmera
-                </button>
-                <button type="button" class="btn btn-success" id="btnCapture" disabled>
-                  <i class="bi bi-camera me-1"></i>Capturar
-                </button>
-                <button type="submit" class="btn btn-primary" id="btnSavePhoto" disabled>
-                  <i class="bi bi-check2-circle me-1"></i>Salvar nova foto
-                </button>
-              </div>
-
-              <video id="video" class="mt-3 rounded-3 border" style="width:100%; display:none;" playsinline></video>
-              <img id="preview" class="mt-3 rounded-3 border" style="width:100%; display:none;" alt="Prévia">
-            </form>
+            <button type="button" id="btn-open-camera" class="btn btn-outline-success w-100">
+              <i class="bi bi-camera me-1"></i>Trocar foto
+            </button>
           </div>
 
-          <!-- Dados -->
-          <div class="col-12 col-lg-8">
-            <form method="post" action="{{ url_for('visitor.visitor_edit_post', visitor_id=visitor.id) }}">
-              <div class="row g-3">
-                <div class="col-12 col-md-6">
-                  <label class="form-label">Nome</label>
-                  <input class="form-control" name="name" value="{{ visitor.name }}" required>
+          {# ── Câmera (hidden por padrão) ────────────────────────── #}
+          <div id="camera-wrapper" style="display: none;" data-camera="1">
+            <form method="post"
+                  action="{{ url_for('visitor.visitor_update_photo', visitor_id=visitor.id) }}"
+                  id="photo-form">
+
+              <input type="hidden" name="photo_data_url" id="photo_data_url">
+
+              <div id="camera-container"
+                   class="position-relative rounded-3 overflow-hidden bg-dark mx-auto border border-2 border-secondary mb-3"
+                   style="width: 220px; height: 220px;">
+
+                <video id="cam-video" playsinline muted
+                       class="w-100 h-100" style="object-fit: cover; display: block;"></video>
+
+                <canvas id="cam-canvas"
+                        class="w-100 h-100 position-absolute top-0 start-0"
+                        style="object-fit: cover; display: none;"></canvas>
+
+                <div id="cam-loading"
+                    class="position-absolute top-0 start-0 w-100 h-100 d-flex flex-column align-items-center justify-content-center text-white"
+                    style="display: none;">
+                  <div class="spinner-border spinner-border-sm text-light mb-2" role="status"></div>
+                  <span class="small">Abrindo...</span>
                 </div>
 
-                <div class="col-12 col-md-6">
-                  <label class="form-label">CPF</label>
-                  <input class="form-control" name="cpf" value="{{ visitor.cpf }}" disabled>
-                </div>
 
-                <div class="col-12 col-md-6">
-                  <label class="form-label">Nome da Mãe</label>
-                  <input class="form-control" name="mom_name" value="{{ visitor.mom_name or '' }}" required>
-                </div>
-
-                <div class="col-12 col-md-6">
-                  <label class="form-label">Nome do Pai</label>
-                  <input class="form-control" name="father_name" value="{{ visitor.father_name or '' }}" placeholder="(opcional)">
-                </div>
-
-                <div class="col-12 col-md-6">
-                  <label class="form-label">Telefone</label>
-                  <input class="form-control" name="phone" value="{{ visitor.phone or '' }}" required autocomplete="tel" inputmode="tel">
-                </div>
-
-                <div class="col-12 col-md-6">
-                  <label class="form-label">E-mail</label>
-                  <input class="form-control" type="email" name="email" value="{{ visitor.email or '' }}" autocomplete="email">
-                </div>
-
-                <div class="col-12">
-                  <label class="form-label">Empresa / Vínculo</label>
-                  <input class="form-control" name="empresa" value="{{ visitor.empresa or '' }}" placeholder="(opcional)">
-                </div>
-
-                <div class="col-12">
-                  <div class="d-flex justify-content-end gap-2 pt-2">
-                    <a class="btn btn-outline-secondary" href="{{ url_for('visitor.checkin_form', visitor_id=visitor.id) }}">
-                      Cancelar
-                    </a>
-                    <button class="btn btn-success" type="submit">Salvar ficha</button>
-                  </div>
+                <div id="cam-error"
+                     class="position-absolute top-0 start-0 w-100 h-100 d-flex flex-column align-items-center justify-content-center text-white"
+                     style="display: none !important;">
+                  <i class="bi bi-camera-video-off fs-3 mb-1 text-danger"></i>
+                  <span class="small">Câmera indisponível</span>
                 </div>
               </div>
-            </form>
 
-<!-- FIM DO FORMUÁRIO -->
+              <button type="button" id="btn-capture"
+                      class="btn btn-success w-100 mb-2" disabled>
+                <i class="bi bi-camera-fill me-1"></i>Capturar
+              </button>
 
-            <hr class="my-4">
+              <button type="button" id="btn-retake"
+                      class="btn btn-outline-secondary w-100 mb-2" style="display: none;">
+                <i class="bi bi-arrow-clockwise me-1"></i>Tirar outra
+              </button>
 
-            <form method="post" action="{{ url_for('visitor.visitor_delete', visitor_id=visitor.id) }}"
-                  onsubmit="return confirm('Tem certeza que deseja excluir este visitante e suas visitas?');">
-              <button class="btn btn-outline-danger">
-                <i class="bi bi-trash me-1"></i>Excluir visitante
+              <div id="btn-save-photo-wrapper" style="display: none;">
+                <button type="submit" class="btn btn-success w-100 mb-2">
+                  <i class="bi bi-check-lg me-1"></i>Salvar foto
+                </button>
+              </div>
+
+              <button type="button" id="btn-cancel-camera"
+                      class="btn btn-outline-secondary btn-sm w-100">
+                Cancelar
               </button>
             </form>
           </div>
 
-        </div>
-      </div>
-    </div>
+          {# ── Categoria badge ───────────────────────────────────── #}
+          <div class="mt-3">
+            {% set cat = visitor.category|default('civil') %}
+            {% if cat == 'militar' %}
+              <span class="badge bg-success fs-6"><i class="bi bi-shield-fill me-1"></i>Militar</span>
+            {% elif cat == 'ex-militar' %}
+              <span class="badge bg-warning text-dark fs-6"><i class="bi bi-shield me-1"></i>Ex-Militar</span>
+            {% else %}
+              <span class="badge bg-secondary fs-6"><i class="bi bi-person me-1"></i>Civil</span>
+            {% endif %}
+          </div>
 
-  </div>
-</div>
+        </div>{# /sheet #}
+      </div>{# /col-lg-4 #}
+
+      {# ══════════════════════════════════════════════════════════════
+         Coluna Direita — Formulário de dados
+         ══════════════════════════════════════════════════════════════ #}
+      <div class="col-12 col-lg-8">
+        <div class="sheet p-3 p-md-4">
+          <form method="post"
+                action="{{ url_for('visitor.visitor_edit_post', visitor_id=visitor.id) }}">
+
+            <div class="row g-3">
+
+              {# Nome + Categoria #}
+              <div class="col-12 col-md-8">
+                <label class="form-label">Nome <span class="text-danger">*</span></label>
+                <input class="form-control form-control-lg text-uppercase"
+                       name="name" required value="{{ visitor.name }}">
+              </div>
+
+              <div class="col-12 col-md-4">
+                <label class="form-label">Categoria</label>
+                <div class="d-flex flex-wrap gap-2 pt-1">
+                  {% set cat = visitor.category|default('civil') %}
+                  <input type="radio" class="btn-check" name="category" id="edit-cat-civil"
+                         value="civil" {% if cat == 'civil' %}checked{% endif %} autocomplete="off">
+                  <label class="btn btn-outline-secondary btn-sm px-3" for="edit-cat-civil">
+                    <i class="bi bi-person me-1"></i>Civil
+                  </label>
+
+                  <input type="radio" class="btn-check" name="category" id="edit-cat-militar"
+                         value="militar" {% if cat == 'militar' %}checked{% endif %} autocomplete="off">
+                  <label class="btn btn-outline-success btn-sm px-3" for="edit-cat-militar">
+                    <i class="bi bi-shield-fill me-1"></i>Militar
+                  </label>
+
+                  <input type="radio" class="btn-check" name="category" id="edit-cat-ex"
+                         value="ex-militar" {% if cat == 'ex-militar' %}checked{% endif %} autocomplete="off">
+                  <label class="btn btn-outline-warning btn-sm px-3" for="edit-cat-ex">
+                    <i class="bi bi-shield me-1"></i>Ex-Mil
+                  </label>
+                </div>
+              </div>
+
+              {# CPF (readonly) #}
+              <div class="col-12 col-md-6">
+                <label class="form-label">CPF</label>
+                <input class="form-control form-control-lg bg-light"
+                       value="{{ visitor.cpf }}" readonly disabled>
+                <div class="form-text">CPF não pode ser alterado.</div>
+              </div>
+
+              {# Telefone #}
+              <div class="col-12 col-md-6">
+                <label class="form-label">Telefone <span class="text-danger">*</span></label>
+                <input class="form-control form-control-lg"
+                       name="phone" required
+                       value="{{ visitor.phone }}"
+                       inputmode="tel"
+                       placeholder="(DDD) 0 0000-0000">
+              </div>
+
+              {# Filiação #}
+              <div class="col-12 col-md-6">
+                <label class="form-label">Nome da Mãe <span class="text-danger">*</span></label>
+                <input class="form-control form-control-lg text-uppercase"
+                       name="mom_name" required
+                       value="{{ visitor.mom_name }}">
+              </div>
+
+              <div class="col-12 col-md-6">
+                <label class="form-label">Nome do Pai</label>
+                <input class="form-control form-control-lg text-uppercase"
+                       name="father_name"
+                       value="{{ visitor.father_name or '' }}">
+              </div>
+
+              {# E-mail + Empresa #}
+              <div class="col-12 col-md-6">
+                <label class="form-label">E-mail</label>
+                <input class="form-control form-control-lg text-lowercase"
+                       type="email" name="email"
+                       value="{{ visitor.email or '' }}"
+                       placeholder="@email.com">
+              </div>
+
+              <div class="col-12 col-md-6">
+                <label class="form-label">Empresa / Vínculo / OM</label>
+                <input class="form-control form-control-lg text-uppercase"
+                       name="empresa"
+                       value="{{ visitor.empresa or '' }}"
+                       placeholder="">
+              </div>
+
+              {# Botões #}
+              <div class="col-12 d-flex justify-content-end gap-2 pt-2">
+                <div class="form-text">O (*) indica um campo obrigatório.</div>
+                <a class="btn btn-outline-secondary"
+                   href="{{ url_for('visitor.checkin_form', visitor_id=visitor.id) }}">Cancelar</a>
+                <button class="btn btn-success btn-lg" type="submit">
+                  <i class="bi bi-check-lg me-1"></i>Salvar ficha
+                </button>
+              </div>
+            </div>
+          </form>
+
+          {# ── Zona de perigo ──────────────────────────────────────── #}
+          <hr class="my-4">
+          <form method="post"
+                action="{{ url_for('visitor.visitor_delete', visitor_id=visitor.id) }}"
+                onsubmit="return confirmAction(event, 'Excluir este visitante permanentemente? Todos os registros de visita serão apagados.')">
+            <button type="submit" class="btn btn-outline-danger btn-sm">
+              <i class="bi bi-trash me-1"></i>Excluir visitante
+            </button>
+          </form>
+
+        </div>{# /sheet #}
+      </div>{# /col-lg-8 #}
+
+    </div>{# /row #}
+
+  </div>{# /card-body #}
+</div>{# /center-card #}
 {% endblock %}
 
 {% block scripts %}
+<script src="/static/js/camera.js"></script>
 <script>
-  // Recomendação: depois migrar isso para static/js/camera.js único.
-  const btnOpen = document.getElementById('btnOpenCam');
-  const btnCapture = document.getElementById('btnCapture');
-  const btnSave = document.getElementById('btnSavePhoto');
-  const video = document.getElementById('video');
-  const preview = document.getElementById('preview');
-  const input = document.getElementById('photo_data_url');
-  let stream = null;
+(function() {
+  const btnOpen      = document.getElementById('btn-open-camera');
+  const btnCancel    = document.getElementById('btn-cancel-camera');
+  const photoWrapper = document.getElementById('current-photo-wrapper');
+  const camWrapper   = document.getElementById('camera-wrapper');
+  const btnSaveWrap  = document.getElementById('btn-save-photo-wrapper');
+  const btnCapture   = document.getElementById('btn-capture');
+  const btnRetake    = document.getElementById('btn-retake');
 
-  async function openCam(){
-    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio:false });
-    video.srcObject = stream;
-    await video.play();
-    video.style.display = "block";
-    btnCapture.disabled = false;
+  if (!btnOpen) return;
+
+  btnOpen.addEventListener('click', function() {
+    photoWrapper.style.display = 'none';
+    camWrapper.style.display   = 'block';
+    window.dispatchEvent(new Event('sisport:open-camera'));
+  });
+
+  btnCancel.addEventListener('click', function() {
+    camWrapper.style.display   = 'none';
+    photoWrapper.style.display = 'block';
+  });
+
+  if (btnCapture) {
+    btnCapture.addEventListener('click', function() {
+      setTimeout(function() {
+        if (document.getElementById('photo_data_url').value) {
+          btnSaveWrap.style.display = 'block';
+        }
+      }, 100);
+    });
   }
 
-  function capture(){
-    const c = document.createElement('canvas');
-    c.width = video.videoWidth;
-    c.height = video.videoHeight;
-    c.getContext('2d').drawImage(video, 0, 0);
-    const dataUrl = c.toDataURL("image/jpeg", 0.85);
-    input.value = dataUrl;
-    preview.src = dataUrl;
-    preview.style.display = "block";
-    btnSave.disabled = false;
+  if (btnRetake) {
+    btnRetake.addEventListener('click', function() {
+      btnSaveWrap.style.display = 'none';
+    });
   }
-
-  btnOpen?.addEventListener('click', () => openCam().catch(() => alert("Sem acesso à câmera. Verifique permissões do navegador.")));
-  btnCapture?.addEventListener('click', capture);
-  window.addEventListener("beforeunload", () => stream?.getTracks().forEach(t => t.stop()));
+})();
 </script>
 {% endblock %}

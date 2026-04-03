@@ -36,51 +36,41 @@
 <div class="center-card">
   <div class="card-body">
 
-    <!-- ─────────────────────────────────────────────────────────────
-         Cabeçalho — Título da página + botão Voltar
-         ───────────────────────────────────────────────────────────── -->
+    {# ── Cabeçalho ──────────────────────────────────────────────── #}
     <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-start gap-2 mb-3">
       <div>
         <h1 class="h4 mb-1">Novo Visitante</h1>
         <div class="muted">Cadastro guiado em 3 etapas.</div>
       </div>
       <a class="btn btn-outline-secondary" href="{{ url_for('visitor.identify') }}">
-        Voltar
+        <i class="bi bi-x-lg me-1"></i>Cancelar
       </a>
     </div>
 
-    <!-- ─────────────────────────────────────────────────────────────
-         Stepper Visual — Badges indicando a etapa atual + barra de
-         progresso (33% / 66% / 100%) conforme wizard.step.
-         ───────────────────────────────────────────────────────────── -->
+    {# ── Stepper Visual ─────────────────────────────────────────── #}
     <div class="mb-4">
-      <!-- Badges das 3 etapas — a etapa ativa recebe text-bg-success -->
       <div class="d-flex flex-wrap gap-2">
-        <div class="badge rounded-pill px-3 py-2 {% if wizard.step == 1 %}text-bg-success{% else %}text-bg-light{% endif %}">
-          1 · Identificação
+        <div class="badge rounded-pill px-3 py-2 {% if wizard.step == 1 %}text-bg-success{% elif wizard.step > 1 %}text-bg-secondary{% else %}text-bg-light{% endif %}">
+          1 · Dados
         </div>
-        <div class="badge rounded-pill px-3 py-2 {% if wizard.step == 2 %}text-bg-success{% else %}text-bg-light{% endif %}">
+        <div class="badge rounded-pill px-3 py-2 {% if wizard.step == 2 %}text-bg-success{% elif wizard.step > 2 %}text-bg-secondary{% else %}text-bg-light{% endif %}">
           2 · Foto
         </div>
         <div class="badge rounded-pill px-3 py-2 {% if wizard.step == 3 %}text-bg-success{% else %}text-bg-light{% endif %}">
-          3 · Local
+          3 · Resumo
         </div>
       </div>
 
-      <!-- Barra de progresso — largura proporcional à etapa -->
       <div class="progress mt-3" style="height: 10px;">
-        <div class="progress-bar bg-success"
-             role="progressbar"
-             style="width: {% if wizard.step == 1 %}33{% elif wizard.step == 2 %}66{% else %}100{% endif %}%;">
-        </div>
+        <div class="progress-bar bg-success" role="progressbar"
+             style="width: {% if wizard.step == 1 %}33{% elif wizard.step == 2 %}66{% else %}100{% endif %}%;"></div>
       </div>
     </div>
 
-    <!-- ===========================================================
-         ETAPA 1 — Identificação (Dados Pessoais)
-         Campos: nome, mãe, pai, CPF, celular, e-mail, empresa.
-         POST → visitor.wizard_step1
-         =========================================================== -->
+
+    {# ═════════════════════════════════════════════════════════════
+       ETAPA 1 — Dados Pessoais + Categoria
+       ═════════════════════════════════════════════════════════════ #}
     {% if wizard.step == 1 %}
     <div class="sheet">
       <div class="sheet-header">
@@ -95,71 +85,98 @@
         <form method="post" action="{{ url_for('visitor.wizard_step1') }}">
           <div class="row g-3">
 
-            <!-- Nome completo (obrigatório) — text-uppercase para padronização -->
-            <div class="col-12">
-              <label class="form-label">Nome completo</label>
-              <input class="form-control form-control-lg text-uppercase" name="name" required value="{{ wizard.name }}" placeholder="Ex: João da Silva">
-            </div>
-
-            <!-- Nome da Mãe (obrigatório) -->
-            <div class="col-12 col-md-6">
-              <label class="form-label">Nome da Mãe</label>
+            {# ── Nome + Categoria (lado a lado) ─────────────────── #}
+            <div class="col-12 col-md-8">
+              <label class="form-label">Nome completo <span class="text-danger">*</span></label>
               <input class="form-control form-control-lg text-uppercase"
-                    name="mom_name"
-                    required
-                    value="{{ wizard.mom_name or '' }}"
-                    placeholder="Nome completo da mãe">
+                     name="name" required
+                     value="{{ wizard.name or '' }}"
+                     placeholder="">
             </div>
 
-            <!-- Nome do Pai (opcional) -->
+            <div class="col-12 col-md-4">
+              <label class="form-label">Categoria <span class="text-danger">*</span></label>
+              <div class="d-flex flex-wrap gap-2 pt-1">
+                {% set cat = wizard.category|default('civil') %}
+
+                <input type="radio" class="btn-check" name="category" id="cat-civil"
+                       value="civil" {% if cat == 'civil' %}checked{% endif %} autocomplete="off">
+                <label class="btn btn-outline-secondary btn-sm px-3" for="cat-civil">
+                  <i class="bi bi-person me-1"></i>Civil
+                </label>
+
+                <input type="radio" class="btn-check" name="category" id="cat-militar"
+                       value="militar" {% if cat == 'militar' %}checked{% endif %} autocomplete="off">
+                <label class="btn btn-outline-success btn-sm px-3" for="cat-militar">
+                  <i class="bi bi-shield-fill me-1"></i>Militar
+                </label>
+
+                <input type="radio" class="btn-check" name="category" id="cat-ex"
+                       value="ex-militar" {% if cat == 'ex-militar' %}checked{% endif %} autocomplete="off">
+                <label class="btn btn-outline-warning btn-sm px-3" for="cat-ex">
+                  <i class="bi bi-shield me-1"></i>Ex-Militar
+                </label>
+              </div>
+            </div>
+
+            {# ── Filiação ────────────────────────────────────────── #}
+            <div class="col-12 col-md-6">
+              <label class="form-label">Nome da Mãe <span class="text-danger">*</span></label>
+              <input class="form-control form-control-lg text-uppercase"
+                     name="mom_name" required
+                     value="{{ wizard.mom_name or '' }}"
+                     placeholder="">
+            </div>
+
             <div class="col-12 col-md-6">
               <label class="form-label">Nome do Pai</label>
               <input class="form-control form-control-lg text-uppercase"
-                    name="father_name"
-                    value="{{ wizard.father_name or '' }}"
-                    placeholder="Nome do pai (opcional)">
+                     name="father_name"
+                     value="{{ wizard.father_name or '' }}"
+                     placeholder="">
             </div>
 
-            <!-- CPF (obrigatório) — máscara aplicada via mask.js (IMask) -->
+            {# ── CPF + Celular ───────────────────────────────────── #}
             <div class="col-12 col-md-6">
-              <label class="form-label">CPF</label>
-              <input class="form-control form-control-lg" name="cpf" required value="{{ wizard.cpf }}" placeholder="000.000.000-00" inputmode="numeric">
-              <div class="form-text">O CPF define a pasta da foto e vincula o cadastro.</div>
-            </div>
-
-            <!-- Celular (obrigatório) — máscara aplicada via mask.js (IMask) -->
-            <div class="col-12 col-md-6">
-              <label class="form-label">Celular</label>
+              <label class="form-label">CPF <span class="text-danger">*</span></label>
               <input class="form-control form-control-lg"
-                    name="phone"
-                    required
-                    value="{{ wizard.phone or '' }}"
-                    autocomplete="tel"
-                    inputmode="tel"
-                    placeholder="(DDD) 9 1234-5678">
+                     name="cpf" required
+                     value="{{ wizard.cpf or '' }}"
+                     placeholder="000.000.000-00"
+                     inputmode="numeric"
+                     readonly>
+              <div class="form-text">O CPF vincula o cadastro e a pasta de fotos.</div>
             </div>
 
-            <!-- E-mail (opcional) — text-lowercase para padronização -->
+            <div class="col-12 col-md-6">
+              <label class="form-label">Celular <span class="text-danger">*</span></label>
+              <input class="form-control form-control-lg"
+                     name="phone" required
+                     value="{{ wizard.phone or '' }}"
+                     autocomplete="tel" inputmode="tel"
+                     placeholder="(DDD) 0 0000-0000">
+            </div>
+
+            {# ── E-mail + Empresa ────────────────────────────────── #}
             <div class="col-12 col-md-6">
               <label class="form-label">E-mail</label>
               <input class="form-control form-control-lg text-lowercase"
-                    type="email"
-                    name="email"
-                    value="{{ wizard.email or '' }}"
-                    placeholder="seuemail@gmail.com">
+                     type="email" name="email"
+                     value="{{ wizard.email or '' }}"
+                     placeholder="@email.com">
             </div>
 
-            <!-- Vínculo empresarial (opcional) — ex: prestador de serviço -->
             <div class="col-12 col-md-6">
-              <label class="form-label">Vínculo Empresarial</label>
+              <label class="form-label">Vínculo Empresarial/OM</label>
               <input class="form-control form-control-lg text-uppercase"
-                    name="empresa"
-                    value="{{ wizard.empresa or '' }}"
-                    placeholder="(opcional) Ex: Técnico da Comlurb">
+                     name="empresa"
+                     value="{{ wizard.empresa or '' }}"
+                     placeholder="">
             </div>
 
-            <!-- Botões de ação: Cancelar (volta à identificação) / Próximo -->
+            {# ── Botões ──────────────────────────────────────────── #}
             <div class="col-12 d-flex justify-content-end gap-2 pt-2">
+              <div class="form-text">O (*) indica um campo obrigatório.</div>
               <a class="btn btn-outline-secondary" href="{{ url_for('visitor.identify') }}">Cancelar</a>
               <button class="btn btn-success btn-lg" type="submit">
                 Próximo <i class="bi bi-arrow-right ms-1"></i>
@@ -171,17 +188,16 @@
     </div>
     {% endif %}
 
-    <!-- ===========================================================
-         ETAPA 2 — Foto (Captura via Webcam) — REDESIGN
-         Câmera abre automaticamente. Preview e vídeo no mesmo lugar.
-         Borda verde ao capturar. Fluxo simplificado.
-         =========================================================== -->
+
+    {# ═════════════════════════════════════════════════════════════
+       ETAPA 2 — Foto + Confirmação dos Dados
+       ═════════════════════════════════════════════════════════════ #}
     {% if wizard.step == 2 %}
     <div class="sheet">
       <div class="sheet-header">
         <div>
-          <h2>Foto</h2>
-          <div class="muted small">Centralize o rosto do visitante e tire a foto.</div>
+          <h2>Foto do Visitante</h2>
+          <div class="muted small">Capture a foto e confira os dados antes de prosseguir.</div>
         </div>
         <span class="badge text-bg-success">Etapa 2/3</span>
       </div>
@@ -194,156 +210,226 @@
 
           <input type="hidden" name="photo_data_url" id="photo_data_url">
 
-          <div data-camera="1">
+          {# ── Câmera centralizada ──────────────────────────────── #}
+          <div class="mx-auto text-center" style="max-width: 420px;" data-camera="1">
 
-            {# ── Viewfinder: vídeo e canvas no mesmo container ──── #}
-            <div class="mx-auto" style="max-width: 520px;">
+            <div id="camera-container"
+                 class="position-relative rounded-4 overflow-hidden bg-dark mx-auto border border-2 border-secondary"
+                 style="aspect-ratio: 4/3;">
 
-              <div id="camera-container"
-                   class="position-relative rounded-4 overflow-hidden bg-dark mx-auto border border-2 border-secondary"
-                   style="aspect-ratio: 4/3;">
+              <video id="cam-video" playsinline muted
+                     class="w-100 h-100" style="object-fit: cover; display: block;"></video>
 
-                {# Stream ao vivo #}
-                <video id="cam-video"
-                       playsinline muted
-                       class="w-100 h-100"
-                       style="object-fit: cover; display: block;">
-                </video>
+              <canvas id="cam-canvas"
+                      class="w-100 h-100 position-absolute top-0 start-0"
+                      style="object-fit: cover; display: none;"></canvas>
 
-                {# Canvas para preview (sobrepõe o vídeo) #}
-                <canvas id="cam-canvas"
-                        class="w-100 h-100 position-absolute top-0 start-0"
-                        style="object-fit: cover; display: none;">
-                </canvas>
-
-                {# Overlay de loading enquanto a câmera não abre #}
-                <div id="cam-loading"
-                     class="position-absolute top-0 start-0 w-100 h-100 d-flex flex-column align-items-center justify-content-center text-white">
-                  <div class="spinner-border text-light mb-2" role="status"></div>
-                  <span class="small">Abrindo câmera...</span>
-                </div>
-
-                {# Overlay de erro caso a câmera falhe #}
-                <div id="cam-error"
-                     class="position-absolute top-0 start-0 w-100 h-100 d-flex flex-column align-items-center justify-content-center text-white"
-                     style="display: none !important;">
-                  <i class="bi bi-camera-video-off fs-1 mb-2 text-danger"></i>
-                  <span class="small text-center px-3">Câmera indisponível.<br>Verifique as permissões ou desative o antivírus.</span>
-                </div>
+              <div id="cam-loading"
+                  class="position-absolute top-0 start-0 w-100 h-100 d-flex flex-column align-items-center justify-content-center text-white"
+                  style="display: none;">
+                <div class="spinner-border text-light mb-2" role="status"></div>
+                <span class="small">Abrindo câmera...</span>
               </div>
 
-              <div class="form-text text-center mt-2 mb-3">
-                <i class="bi bi-lightbulb me-1"></i>
-                Dica: boa iluminação, fundo neutro, rosto centralizado.
+
+              <div id="cam-error"
+                   class="position-absolute top-0 start-0 w-100 h-100 d-flex flex-column align-items-center justify-content-center text-white"
+                   style="display: none !important;">
+                <i class="bi bi-camera-video-off fs-1 mb-2 text-danger"></i>
+                <span class="small text-center px-3">Câmera indisponível.<br>Verifique permissões.</span>
               </div>
             </div>
 
-            {# ── Botão principal: Tirar Foto / Tirar Outra ──────── #}
-            <div class="mx-auto" style="max-width: 520px;">
-
-              {# Botão TIRAR FOTO (visível quando NÃO tem foto) #}
-              <button type="button"
-                      id="btn-capture"
-                      class="btn btn-success btn-lg w-100 py-3 mb-3"
-                      disabled>
-                <i class="bi bi-camera-fill me-2 fs-5"></i>Tirar Foto
-              </button>
-
-              {# Botão TIRAR OUTRA (visível quando JÁ tem foto) #}
-              <button type="button"
-                      id="btn-retake"
-                      class="btn btn-outline-secondary w-100 mb-3"
-                      style="display: none;">
-                <i class="bi bi-arrow-clockwise me-1"></i>Tirar outra foto
-              </button>
-
-              {# ── Botões inferiores: Voltar / Continuar ──────── #}
-              <div class="d-flex gap-2">
-                <a class="btn btn-outline-secondary btn-lg flex-fill py-2"
-                   href="{{ url_for('visitor.wizard') }}">
-                  <i class="bi bi-arrow-left me-1"></i>Voltar
-                </a>
-                <button type="submit"
-                        id="btn-next"
-                        class="btn btn-success btn-lg flex-fill py-2"
-                        disabled>
-                  Continuar<i class="bi bi-arrow-right ms-1"></i>
-                </button>
-              </div>
-
-              {# Link discreto para pular #}
-              <div class="text-center mt-3">
-                <button type="submit"
-                        name="skip"
-                        value="1"
-                        id="skip-btn"
-                        class="btn btn-link text-muted text-decoration-none small"
-                        formnovalidate>
-                  Pular sem foto →
-                </button>
-              </div>
+            <div class="form-text text-center mt-2 mb-3">
+              <i class="bi bi-lightbulb me-1"></i>Boa iluminação, fundo neutro, rosto centralizado.
             </div>
 
+            <button type="button" id="btn-capture"
+                    class="btn btn-success btn-lg w-100 py-3 mb-2" disabled>
+              <i class="bi bi-camera-fill me-2 fs-5"></i>Tirar Foto
+            </button>
+
+            <button type="button" id="btn-retake"
+                    class="btn btn-outline-secondary w-100 mb-2" style="display: none;">
+              <i class="bi bi-arrow-clockwise me-1"></i>Tirar outra foto
+            </button>
+          </div>
+
+          {# ── Botões de navegação ────────────────────────────────── #}
+          <div class="d-flex gap-2 mt-4">
+            <a class="btn btn-outline-secondary btn-lg flex-fill py-2"
+               href="{{ url_for('visitor.wizard_back', step=1) }}">
+              <i class="bi bi-arrow-left me-1"></i>Voltar
+            </a>
+            <button type="submit" id="btn-next"
+                    class="btn btn-success btn-lg flex-fill py-2" disabled>
+              Continuar<i class="bi bi-arrow-right ms-1"></i>
+            </button>
+          </div>
+
+          <div class="text-center mt-3">
+            <button type="submit" name="skip" value="1" id="skip-btn"
+                    class="btn btn-link text-muted text-decoration-none small"
+                    formnovalidate>
+              Pular sem foto →
+            </button>
           </div>
         </form>
       </div>
     </div>
     {% endif %}
 
-    <!-- ===========================================================
-         ETAPA 3 — Local / Destino
-         Campo único: destino (setor, sala ou pessoa a ser visitada).
-         Ao submeter, o sistema finaliza o cadastro do visitante E
-         registra automaticamente o check-in (entrada) da visita.
-         POST → visitor.wizard_finish
-         =========================================================== -->
-    {% if wizard.step == 3 %}
-    <div class="sheet">
-      <div class="sheet-header">
-        <div>
-          <h2>Local / Destino</h2>
-          <div class="muted small">Informe para onde o visitante irá e registre a entrada.</div>
+
+{# ═════════════════════════════════════════════════════════════
+     ETAPA 3 — Resumo Completo (Card) + Local/Destino
+     ═════════════════════════════════════════════════════════════ #}
+  {% if wizard.step == 3 %}
+  <div class="sheet">
+    <div class="sheet-header">
+      <div>
+        <h2>Resumo e Destino</h2>
+        <div class="muted small">Confira tudo e registre a entrada.</div>
+      </div>
+      <span class="badge text-bg-success">Etapa 3/3</span>
+    </div>
+
+    <div class="p-3 p-md-4">
+
+      {# ═══════════════════════════════════════════════════════════
+         CARTEIRA DO VISITANTE — Confirmação (sem edição / sem status)
+         ═══════════════════════════════════════════════════════════ #}
+      <div class="id-card mb-4">
+
+        {# ── Cabeçalho institucional ─────────────────────────────── #}
+        <div class="id-card-header">
+          <div class="d-flex align-items-center gap-2">
+            <i class="bi bi-shield-lock fs-4 opacity-75"></i>
+            <div>
+              <h3 class="id-card-title mb-0">Carteira de Visitante</h3>
+              <div class="small opacity-75">SISPORT — Sistema de Portaria</div>
+            </div>
+          </div>
         </div>
-        <span class="badge text-bg-success">Etapa 3/3</span>
-      </div>
 
-      <div class="p-3 p-md-4">
-        <form method="post" action="{{ url_for('visitor.wizard_finish') }}">
-          <div class="row g-3 align-items-end">
+        <div class="id-card-body">
 
-            <!-- Destino (obrigatório) — texto livre para setor/sala/pessoa -->
-            <div class="col-12 col-md-8">
-              <label class="form-label">Local / Pessoa / Setor</label>
-              <input class="form-control form-control-lg" name="destination" required placeholder="Ex: Seção de Pessoal / Sala X / Sgt Fulano">
+          {# ── Linha principal: Foto + Dados ─────────────────────── #}
+          <div class="d-flex flex-column flex-sm-row gap-3 align-items-center align-items-sm-start">
+
+            {# Foto estilo 3×4 #}
+            <div class="text-center flex-shrink-0">
+              <div class="photo-box mx-auto" style="width:140px;height:170px;border-radius:8px;">
+                {% if wizard.photo_rel_path %}
+                  <img src="{{ url_for('visitor.uploaded_file', filename=wizard.photo_rel_path) }}"
+                       alt="Foto" class="w-100 h-100" style="object-fit:cover;">
+                {% else %}
+                  <img src="{{ url_for('static', filename='img/avatar-placeholder.jpg') }}"
+                       alt="Sem foto" class="w-100 h-100 opacity-50" style="object-fit:cover;">
+                {% endif %}
+              </div>
+              <div class="mt-2">
+                {% set cat = wizard.category|default('civil') %}
+                {% if cat == 'militar' %}
+                  <span class="badge bg-success px-3 py-1"><i class="bi bi-shield-fill me-1"></i>Militar</span>
+                {% elif cat == 'ex-militar' %}
+                  <span class="badge bg-warning text-dark px-3 py-1"><i class="bi bi-shield me-1"></i>Ex-Militar</span>
+                {% else %}
+                  <span class="badge bg-secondary px-3 py-1"><i class="bi bi-person me-1"></i>Civil</span>
+                {% endif %}
+              </div>
             </div>
 
-            <!-- Botão de finalização — cadastra visitante + registra check-in -->
-            <div class="col-12 col-md-4">
-              <button class="btn btn-success btn-lg w-100" type="submit">
-                Finalizar e Registrar Entrada
-              </button>
-            </div>
+            {# Dados de identificação #}
+            <div class="flex-grow-1 w-100">
 
-            <!-- Voltar para etapa anterior -->
-            <div class="col-12">
-              <a class="btn btn-outline-secondary" href="{{ url_for('visitor.wizard') }}">Voltar</a>
+              {# Nome em destaque #}
+              <div class="border-bottom pb-2 mb-3">
+                <div class="text-uppercase fw-bold text-muted" style="font-size:.6rem;letter-spacing:1.5px;">Nome Completo</div>
+                <div class="fw-bold fs-5">{{ wizard.name }}</div>
+              </div>
+
+              <div class="row g-2">
+
+                <div class="col-6 col-lg-4">
+                  <div class="text-uppercase fw-bold text-muted" style="font-size:.6rem;letter-spacing:1px;">CPF</div>
+                  <div class="fw-semibold">{{ wizard.cpf }}</div>
+                </div>
+
+                <div class="col-6 col-lg-4">
+                  <div class="text-uppercase fw-bold text-muted" style="font-size:.6rem;letter-spacing:1px;">Telefone</div>
+                  <div class="fw-semibold">{{ wizard.phone }}</div>
+                </div>
+
+                {% if wizard.email %}
+                <div class="col-12 col-lg-4">
+                  <div class="text-uppercase fw-bold text-muted" style="font-size:.6rem;letter-spacing:1px;">E-mail</div>
+                  <div class="fw-semibold small text-truncate">{{ wizard.email }}</div>
+                </div>
+                {% endif %}
+
+                <div class="col-12 col-lg-6">
+                  <div class="text-uppercase fw-bold text-muted" style="font-size:.6rem;letter-spacing:1px;">Mãe</div>
+                  <div class="fw-semibold">{{ wizard.mom_name }}</div>
+                </div>
+
+                {% if wizard.father_name %}
+                <div class="col-12 col-lg-6">
+                  <div class="text-uppercase fw-bold text-muted" style="font-size:.6rem;letter-spacing:1px;">Pai</div>
+                  <div class="fw-semibold">{{ wizard.father_name }}</div>
+                </div>
+                {% endif %}
+
+                {% if wizard.empresa %}
+                <div class="col-12">
+                  <div class="text-uppercase fw-bold text-muted" style="font-size:.6rem;letter-spacing:1px;">Empresa / Vínculo</div>
+                  <div class="fw-semibold">{{ wizard.empresa }}</div>
+                </div>
+                {% endif %}
+
+              </div>
             </div>
           </div>
-        </form>
+        </div>
       </div>
-    </div>
-    {% endif %}
 
+      {# ── Formulário de destino ──────────────────────────────── #}
+      <form method="post" action="{{ url_for('visitor.wizard_finish') }}">
+        <div class="border rounded-3 p-3 p-md-4 bg-light">
+          <h5 class="fw-bold mb-3">
+            <i class="bi bi-geo-alt me-1 text-success"></i>Local / Destino
+          </h5>
+
+          <div class="row g-3 align-items-end">
+            <div class="col-12">
+              <label class="form-label">Para onde o visitante vai? <span class="text-danger">*</span></label>
+              <input class="form-control form-control-lg"
+                     name="destination" required
+                     placeholder="Ex: Seção de Pessoal / Sala X / Sgt Fulano"
+                     autofocus>
+            </div>
+          </div>
+        </div>
+
+        {# ── Botões de ação ────────────────────────────────────── #}
+        <div class="d-flex gap-2 mt-4">
+          <a class="btn btn-outline-secondary btn-lg flex-fill py-2"
+             href="{{ url_for('visitor.wizard_back', step=2) }}">
+            <i class="bi bi-arrow-left me-1"></i>Voltar
+          </a>
+          <button type="submit" class="btn btn-success btn-lg flex-fill py-3">
+            <i class="bi bi-check-lg me-1"></i>Finalizar e Registrar Entrada
+          </button>
+        </div>
+      </form>
+
+    </div>
   </div>
+  {% endif %}
+
+</div>
 </div>
 {% endblock %}
 
-<!-- ─────────────────────────────────────────────────────────────────
-     Scripts — camera.js
-     Controla a webcam na etapa 2: ativar/desativar stream, capturar
-     snapshot, gerar Data URL (base64) e habilitar botão "Próximo".
-     Expõe a função ensurePhoto() usada no onsubmit do formulário.
-     ───────────────────────────────────────────────────────────────── -->
 {% block scripts %}
 <script src="/static/js/camera.js"></script>
 {% endblock %}

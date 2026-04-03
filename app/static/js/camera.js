@@ -72,6 +72,20 @@
     return canvasEl.toDataURL("image/jpeg", 0.85);
   }
 
+  // ── Helpers de visibilidade (vence Bootstrap d-flex) ──────────────
+
+  function hide(el) {
+    if (!el) return;
+    el.classList.add("d-none");
+    el.classList.remove("d-flex");
+  }
+
+  function showFlex(el) {
+    if (!el) return;
+    el.classList.add("d-flex");
+    el.classList.remove("d-none");
+  }
+
   // ── Validação global de foto obrigatória ──────────────────────────
 
   window.ensurePhoto = function ensurePhoto(e) {
@@ -86,86 +100,100 @@
     return true;
   };
 
-  // ── Inicialização principal ───────────────────────────────────────
+  // ── Inicialização principal (wizard etapa 2) ──────────────────────
 
   document.addEventListener("DOMContentLoaded", () => {
 
     const block = document.querySelector('[data-camera="1"]');
     if (!block) return;
 
-    // Elementos
-    const video       = document.getElementById("cam-video");
-    const canvas      = document.getElementById("cam-canvas");
-    const container   = document.getElementById("camera-container");
-    const loading     = document.getElementById("cam-loading");
-    const errorOverlay = document.getElementById("cam-error");
-    const hiddenInput = document.getElementById("photo_data_url");
+    // Se o bloco está escondido (editor), não faz nada agora
+    if (block.offsetParent === null) {
+      log("Bloco de câmera oculto — aguardando sisport:open-camera.");
+      return;
+    }
 
-    const btnCapture  = document.getElementById("btn-capture");
-    const btnRetake   = document.getElementById("btn-retake");
-    const btnNext     = document.getElementById("btn-next");
-    const btnSkip     = document.getElementById("skip-btn");
+    initCamera();
+  });
+
+  // ── Função central de inicialização ───────────────────────────────
+
+  function initCamera() {
+    const video        = document.getElementById("cam-video");
+    const canvas       = document.getElementById("cam-canvas");
+    const container    = document.getElementById("camera-container");
+    const loading      = document.getElementById("cam-loading");
+    const errorOverlay = document.getElementById("cam-error");
+    const hiddenInput  = document.getElementById("photo_data_url");
+
+    const btnCapture   = document.getElementById("btn-capture");
+    const btnRetake    = document.getElementById("btn-retake");
+    const btnNext      = document.getElementById("btn-next");
+    const btnSkip      = document.getElementById("skip-btn");
+
+    if (!video || !container) return;
 
     let stream = null;
-    let hasPhoto = false;
 
     // ── Estados visuais ─────────────────────────────────────────────
 
     function setStateLive() {
-      // Câmera aberta, sem foto capturada
-      hasPhoto = false;
       video.style.display = "block";
       canvas.style.display = "none";
-      container.classList.remove("border-success");
-      container.classList.add("border-secondary");
+      container.classList.remove("border-secondary");
+      container.classList.add("border-success");
+      container.style.borderWidth = "";
 
-      btnCapture.style.display = "block";
-      btnCapture.disabled = false;
-      btnRetake.style.display = "none";
-      btnNext.disabled = true;
-      btnNext.classList.remove("btn-success");
-      btnNext.classList.add("btn-success");
-      btnNext.disabled = true;
-
-      if (hiddenInput) hiddenInput.value = "";
+      if (btnCapture) { btnCapture.style.display = "block"; btnCapture.disabled = false; }
+      if (btnRetake)    btnRetake.style.display = "none";
+      if (btnNext)      btnNext.disabled = true;
+      if (hiddenInput)  hiddenInput.value = "";
     }
 
     function setStateCaptured(dataUrl) {
-      // Foto capturada — canvas visível com borda verde
-      hasPhoto = true;
       video.style.display = "none";
       canvas.style.display = "block";
       container.classList.remove("border-secondary");
       container.classList.add("border-success");
       container.style.borderWidth = "3px";
 
-      btnCapture.style.display = "none";
-      btnRetake.style.display = "block";
-      btnNext.disabled = false;
-
+      if (btnCapture) btnCapture.style.display = "none";
+      if (btnRetake)  btnRetake.style.display = "block";
+      if (btnNext)    btnNext.disabled = false;
       if (hiddenInput) hiddenInput.value = dataUrl;
     }
 
     function setStateError() {
-      if (loading) loading.style.display = "none";
-      if (errorOverlay) errorOverlay.style.display = "flex";
-      btnCapture.disabled = true;
+      hide(loading);
+      showFlex(errorOverlay);
+      if (btnCapture) btnCapture.disabled = true;
     }
 
-    // ── Abrir câmera automaticamente ────────────────────────────────
+    function setStateReady() {
+      hide(loading);
+      hide(errorOverlay);
+      setStateLive();
+    }
 
-    (async function autoOpen() {
+    // ── Abrir câmera ────────────────────────────────────────────────
+
+    async function startCamera() {
+      // Mostra loading, esconde erro
+      showFlex(loading);
+      hide(errorOverlay);
+
       try {
         stream = await openCamera(video);
         log("Câmera aberta com sucesso.");
-
-        if (loading) loading.style.display = "none";
-        setStateLive();
+        setStateReady();
       } catch (err) {
         console.error("[camera] Falha ao abrir:", err?.name, err?.message, err);
         setStateError();
       }
-    })();
+    }
+
+    // ── Auto-abrir ──────────────────────────────────────────────────
+    startCamera();
 
     // ── Botão TIRAR FOTO ────────────────────────────────────────────
 
@@ -180,29 +208,38 @@
 
     btnRetake?.addEventListener("click", () => {
       setStateLive();
-      // Se a câmera parou por algum motivo, reabrir
       if (!stream || !video.srcObject) {
-        (async () => {
-          try {
-            stream = await openCamera(video);
-            setStateLive();
-          } catch (err) {
-            setStateError();
-          }
-        })();
+        startCamera();
       }
       log("Modo retake — câmera ao vivo.");
     });
 
-    // ── Botão PULAR — limpa foto residual ───────────────────────────
+    // ── Botão PULAR ─────────────────────────────────────────────────
 
     btnSkip?.addEventListener("click", () => {
       if (hiddenInput) hiddenInput.value = "";
     });
 
-    // ── Cleanup ao sair da página ───────────────────────────────────
+    // ── Cleanup ─────────────────────────────────────────────────────
 
     window.addEventListener("beforeunload", () => stopCamera(stream));
+  }
+
+  // ── Abertura sob demanda (tela de edição) ───────────────────────
+
+  window.addEventListener("sisport:open-camera", () => {
+    const video = document.getElementById("cam-video");
+    if (!video) return;
+
+    // Se já tem stream rodando, não reabre
+    if (video.srcObject) {
+      log("Câmera já ativa, ignorando.");
+      const loading = document.getElementById("cam-loading");
+      hide(loading);
+      return;
+    }
+
+    initCamera();
   });
 
 })();
