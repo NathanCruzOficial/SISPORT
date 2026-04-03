@@ -1,0 +1,32 @@
+{# ═══════════════════════════════════════════════════════════════
+   Modal de Confirmação Global — Substitui o confirm() nativo
+   Uso no base.html:  include 'components/confirm_modal.html'
+   ═══════════════════════════════════════════════════════════════ #}
+<div class="modal fade" id="confirmModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow">
+
+      <div class="modal-body text-center px-4 pt-5 pb-3">
+        <div class="mb-3">
+          <div class="d-inline-flex align-items-center justify-content-center rounded-circle bg-danger bg-opacity-10"
+               style="width: 72px; height: 72px;">
+            <i class="bi bi-exclamation-triangle-fill text-danger fs-1"></i>
+          </div>
+        </div>
+
+        <h5 class="fw-bold mb-2">Confirmar ação</h5>
+        <p class="text-muted mb-0" id="confirmModalMsg">Tem certeza?</p>
+      </div>
+
+      <div class="modal-footer border-0 justify-content-center gap-2 pb-4">
+        <button type="button" class="btn btn-outline-secondary px-4" data-bs-dismiss="modal">
+          Cancelar
+        </button>
+        <button type="button" class="btn btn-danger px-4" id="confirmModalOk">
+          <i class="bi bi-check-lg me-1"></i>Confirmar
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
