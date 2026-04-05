@@ -1,81 +1,100 @@
-# =====================================================================
-# models/settings.py
-# Modelo e Helpers de Configurações da Aplicação — Define a tabela
-# 'app_settings' (chave-valor) para armazenar configurações
-# persistentes da aplicação (ex.: nome da portaria, limites, flags)
-# e fornece funções utilitárias de leitura e escrita simplificadas.
-# =====================================================================
+# app/models/settings.py
+"""
+Modelo e helpers para a tabela **settings** (configurações do sistema).
 
-# ─────────────────────────────────────────────────────────────────────
-# Imports
-# ─────────────────────────────────────────────────────────────────────
-from __future__ import annotations
+A tabela armazena pares chave/valor que controlam o comportamento do
+SISPORT (nome da instituição, categorias de visitante, política de
+retenção etc.).
 
-from sqlalchemy import String, Text
+Nota sobre compatibilidade
+--------------------------
+Bancos criados em versões anteriores podem não possuir AUTOINCREMENT
+na coluna ``id``.  Como ``db.create_all()`` não altera tabelas já
+existentes, o helper ``_next_id()`` calcula o próximo ID manualmente,
+garantindo que inserções funcionem em **qualquer** versão do schema.
+"""
+
 from app.extensions import db
+from app.defaults import get_default
 
 
-# =====================================================================
-# Modelo — AppSetting (Configurações Chave-Valor)
-# =====================================================================
+# ── Modelo ────────────────────────────────────────────────────────────
 
-class AppSetting(db.Model):
+class Setting(db.Model):
+    """Representa um par chave/valor de configuração persistido no banco."""
+
+    __tablename__ = "settings"
+
+    id    = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    key   = db.Column(db.String(100), unique=True, nullable=False)
+    value = db.Column(db.Text, default="")
+
+    def __repr__(self) -> str:
+        return f"<Setting {self.key!r}={self.value!r}>"
+
+
+# ── Helpers internos ──────────────────────────────────────────────────
+
+def _next_id() -> int:
     """
-    Armazena configurações da aplicação em formato chave-valor.
+    Retorna o próximo ID disponível para inserção.
 
-    Tabela: app_settings
+    Necessário para manter compatibilidade com bancos antigos cuja
+    coluna ``id`` foi criada sem AUTOINCREMENT.  Usa ``COALESCE``
+    para retornar 0 caso a tabela esteja vazia.
 
-    Colunas:
-    - key   (String(64), PK):    Identificador único da configuração.
-    - value (Text, NOT NULL):    Valor da configuração (texto livre).
-
-    Exemplos de uso:
-    - key='portaria_nome', value='Portaria Principal'
-    - key='max_visitantes', value='50'
+    Returns:
+        int: Próximo valor inteiro a ser usado como ``id``.
     """
+    max_id = db.session.query(
+        db.func.coalesce(db.func.max(Setting.id), 0)
+    ).scalar()
+    return max_id + 1
 
-    __tablename__ = "app_settings"
 
-    key   = db.Column(String(64), primary_key=True)
-    value = db.Column(Text, nullable=False)
+# ── API pública ───────────────────────────────────────────────────────
 
-
-# =====================================================================
-# Helper — Leitura de Configuração
-# =====================================================================
-
-def get_setting(key: str, default: str | None = None) -> str | None:
+def get_setting(key: str, fallback: str | None = None) -> str:
     """
-    Busca o valor de uma configuração pela chave.
+    Obtém o valor de uma configuração.
 
-    :param key:     (str) Chave da configuração a ser consultada.
-    :param default: (str | None) Valor padrão caso a chave não exista
-                    (padrão: None).
-    :return: (str | None) Valor armazenado ou o default informado.
+    Ordem de resolução:
+        1. Valor persistido no banco (tabela ``settings``).
+        2. ``fallback`` informado pelo chamador (se houver).
+        3. Valor padrão definido em ``app.defaults``.
+
+    Args:
+        key:      Chave da configuração (ex.: ``'inst_name'``).
+        fallback: Valor alternativo caso a chave não exista no banco.
+
+    Returns:
+        str: Valor da configuração.
     """
-    row = db.session.get(AppSetting, key)
-    return row.value if row else default
+    row = Setting.query.filter_by(key=key).first()
+    if row is not None:
+        return row.value
+    if fallback is not None:
+        return fallback
+    return get_default(key)
 
-
-# =====================================================================
-# Helper — Escrita/Atualização de Configuração
-# =====================================================================
 
 def set_setting(key: str, value: str) -> None:
     """
-    Cria ou atualiza uma configuração no banco.
+    Define (ou atualiza) o valor de uma configuração.
 
-    - Se a chave já existe, atualiza o valor (UPDATE).
-    - Se não existe, insere um novo registro (INSERT).
+    Se a chave já existir no banco, apenas atualiza o campo ``value``.
+    Caso contrário, insere um novo registro com ID calculado por
+    ``_next_id()`` (compatível com bancos sem AUTOINCREMENT).
 
-    Nota: o chamador é responsável por executar db.session.commit()
-    após a chamada para persistir a alteração.
+    **Importante:** o chamador é responsável por executar
+    ``db.session.commit()`` após a chamada.
 
-    :param key:   (str) Chave da configuração.
-    :param value: (str) Novo valor a ser armazenado.
+    Args:
+        key:   Chave da configuração.
+        value: Novo valor a ser persistido.
     """
-    row = db.session.get(AppSetting, key)
+    row = Setting.query.filter_by(key=key).first()
     if row:
         row.value = value
     else:
-        db.session.add(AppSetting(key=key, value=value))
+        db.session.add(Setting(id=_next_id(), key=key, value=value))

@@ -1,0 +1,48 @@
+<div class="text-muted small mb-3">
+  Exporte suas configurações para usar em outro computador ou importe um arquivo existente.
+  <strong>A senha de administrador não é incluída</strong> na exportação (por segurança).
+</div>
+
+<div class="row g-3">
+  {# ── Exportar ─────────────────────────────────────────────────── #}
+  <div class="col-12 col-md-6">
+    <div class="card bg-light border-0 h-100">
+      <div class="card-body text-center">
+        <i class="bi bi-box-arrow-up fs-2 text-success d-block mb-2"></i>
+        <h6 class="fw-semibold">Exportar Configurações</h6>
+        <p class="text-muted small">
+          Baixa um arquivo <code>.json</code> com todas as configurações atuais
+          (exceto senha).
+        </p>
+        <a href="{{ url_for('admin.export_settings') }}"
+           class="btn btn-outline-success btn-sm">
+          <i class="bi bi-download me-1"></i>Exportar JSON
+        </a>
+      </div>
+    </div>
+  </div>
+
+  {# ── Importar ─────────────────────────────────────────────────── #}
+  <div class="col-12 col-md-6">
+    <div class="card bg-light border-0 h-100">
+      <div class="card-body text-center">
+        <i class="bi bi-box-arrow-in-down fs-2 text-primary d-block mb-2"></i>
+        <h6 class="fw-semibold">Importar Configurações</h6>
+        <p class="text-muted small">
+          Envie um arquivo <code>.json</code> exportado anteriormente.
+        </p>
+        <form method="post" action="{{ url_for('admin.import_settings') }}"
+              enctype="multipart/form-data"
+              onsubmit="return confirm('Isso substituirá as configurações atuais. Continuar?')">
+          <div class="mb-2">
+            <input type="file" name="config_file" class="form-control form-control-sm"
+                   accept=".json" required>
+          </div>
+          <button type="submit" class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-upload me-1"></i>Importar JSON
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>

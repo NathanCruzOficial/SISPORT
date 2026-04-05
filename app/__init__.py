@@ -49,6 +49,7 @@ def create_app() -> Flask:
     app.register_blueprint(visitor_bp)
     app.register_blueprint(admin_bp)
 
+
     @app.context_processor
     def inject_globals():
         return dict(
@@ -65,6 +66,8 @@ def create_app() -> Flask:
     # Cria tabelas
     with app.app_context():
         from .models import visitor  # noqa: F401
+        from app.seed import seed_defaults
         db.create_all()
+        seed_defaults()  # ✅ Sincroniza defaults com o banco
 
     return app

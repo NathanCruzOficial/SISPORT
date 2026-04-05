@@ -1,0 +1,21 @@
+<form method="post" action="{{ url_for('settings.save_tab', tab_key='general') }}">
+  {# Reaproveita a mesma rota de save, os campos são cumulativos #}
+  <input type="hidden" name="inst_name" value="{{ settings.general.institution.name }}">
+  <input type="hidden" name="inst_short_name" value="{{ settings.general.institution.short_name }}">
+  <input type="hidden" name="header_line_1" value="{{ settings.general.institution.header_line_1 }}">
+  <input type="hidden" name="header_line_2" value="{{ settings.general.institution.header_line_2 }}">
+
+  <div class="row g-3">
+    <div class="col-12 col-md-6">
+      <label class="form-label fw-semibold small">Registros por página</label>
+      <input type="number" name="records_per_page" class="form-control" min="10" max="200"
+             value="{{ settings.general.appearance.records_per_page }}">
+      <div class="form-text">Quantidade padrão de resultados em listagens.</div>
+    </div>
+  </div>
+  <div class="mt-3 text-end">
+    <button type="submit" class="btn btn-primary btn-sm">
+      <i class="bi bi-check-lg me-1"></i>Salvar
+    </button>
+  </div>
+</form>

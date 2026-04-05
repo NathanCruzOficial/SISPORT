@@ -1,0 +1,170 @@
+<form method="post" action="{{ url_for('admin.save_database') }}" id="retention-form">
+  <div class="text-muted small mb-3">
+    A limpeza é baseada na <strong>última saída</strong> registrada (checkout).
+    Visitantes com <strong>visita em aberto</strong> não são afetados.
+    <strong>0</strong> desativa a limpeza automática.
+  </div>
+
+  <div class="row g-3 align-items-end">
+    <div class="col-12 col-md-4">
+      <label class="form-label fw-semibold small" for="retention_days">Dias de retenção (0–999)</label>
+      <input id="retention_days" name="retention_days" type="number"
+             min="0" max="999" step="1" class="form-control"
+             value="{{ settings.retention_days }}" required>
+      <div class="form-text">Ex.: 30 → após 30 dias sem saída registrada</div>
+    </div>
+
+    <div class="col-12 col-md-8">
+      <div class="fw-semibold small mb-2">Ação ao expirar</div>
+
+      <div class="vstack gap-2">
+        <label class="form-check">
+          <input class="form-check-input" type="radio" name="retention_action"
+                 id="action_delete" value="delete"
+                 {% if settings.retention_action == 'delete' %}checked{% endif %}>
+          <span class="form-check-label">
+            <strong>Apagar definitivamente</strong>
+            <div class="text-muted small">Remove dados do banco e apaga a foto do disco (economiza armazenamento).</div>
+          </span>
+        </label>
+
+        <label class="form-check">
+          <input class="form-check-input" type="radio" name="retention_action"
+                 id="action_anonymize" value="anonymize"
+                 {% if settings.retention_action == 'anonymize' %}checked{% endif %}>
+          <span class="form-check-label">
+            <strong>Anonimizar</strong>
+            <div class="text-muted small">Remove dados pessoais e pode remover a foto; mantém registros de visita.</div>
+          </span>
+        </label>
+
+        <div id="anonymize_opts" class="ms-4"
+             style="{% if settings.retention_action != 'anonymize' %}display:none{% endif %}">
+          <label class="form-check">
+            <input class="form-check-input" type="checkbox" name="anonymize_delete_photo"
+                   id="anonymize_delete_photo" value="1"
+                   {% if settings.anonymize_delete_photo %}checked{% endif %}>
+            <span class="form-check-label">
+              Apagar foto ao anonimizar
+              <div class="text-muted small">Recomendado para reduzir disco.</div>
+            </span>
+          </label>
+        </div>
+      </div>
+
+      <div class="alert alert-info mt-3 mb-0">
+        <div class="fw-semibold mb-1">Resumo da regra</div>
+        <div class="small" id="rule_summary"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mt-3 text-end">
+    <button type="submit" class="btn btn-primary btn-sm">
+      <i class="bi bi-check-lg me-1"></i>Salvar
+    </button>
+  </div>
+</form>
+
+<hr class="my-3">
+
+<div class="d-flex flex-column flex-md-row align-items-md-center gap-3">
+  <div>
+    <h6 class="mb-1">Simulação</h6>
+    <div class="text-muted small">
+      Estimativa de quantos visitantes seriam afetados se a limpeza rodasse agora.
+    </div>
+  </div>
+
+  <div class="d-flex gap-2 align-items-center ms-md-auto">
+    <button class="btn btn-outline-primary btn-sm" type="button" id="btnRecalc">
+      <i class="bi bi-calculator me-1"></i>Recalcular
+    </button>
+    <span class="small">Resultado: <strong id="sim_result">—</strong></span>
+  </div>
+
+  <button class="btn btn-outline-danger btn-sm" type="button" id="btnRunNow">
+    <i class="bi bi-trash3 me-1"></i>Executar limpeza agora
+  </button>
+</div>
+
+<script>
+(function(){
+  const days = document.getElementById("retention_days");
+  const deleteRadio = document.getElementById("action_delete");
+  const anonymRadio = document.getElementById("action_anonymize");
+  const anonymOpts = document.getElementById("anonymize_opts");
+  const anonymDelPhoto = document.getElementById("anonymize_delete_photo");
+  const summary = document.getElementById("rule_summary");
+  const simResult = document.getElementById("sim_result");
+  const btnRecalc = document.getElementById("btnRecalc");
+  const btnRunNow = document.getElementById("btnRunNow");
+
+  function action(){
+    return anonymRadio.checked ? "anonymize" : "delete";
+  }
+
+  function updateAnonymizeVisibility(){
+    anonymOpts.style.display = anonymRadio.checked ? "block" : "none";
+  }
+
+  function updateSummary(){
+    const n = parseInt(days.value || "0", 10);
+    if (n === 0) {
+      summary.innerText = "Retenção automática desativada (0 dias).";
+      return;
+    }
+    summary.innerText =
+      `Após ${n} dia(s) desde a última saída (checkout), visitantes elegíveis serão ` +
+      (action() === "delete" ? "apagados definitivamente" : "anonimizados") +
+      ". Visitantes com visita em aberto não serão afetados.";
+  }
+
+  async function simulate(){
+    const n = parseInt(days.value || "0", 10);
+    simResult.innerText = "calculando...";
+    const resp = await fetch("{{ url_for('admin.settings_retention_simulate') }}", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ retention_days: n })
+    });
+    const data = await resp.json();
+    simResult.innerText = resp.ok ? data.count : "erro";
+  }
+
+  async function runNow(){
+    if (!confirm("Executar limpeza agora? Essa ação pode apagar/anonimizar dados.")) return;
+    const n = parseInt(days.value || "0", 10);
+    const delPhoto = anonymRadio.checked && anonymDelPhoto.checked ? 1 : 0;
+    btnRunNow.disabled = true;
+    try {
+      const resp = await fetch("{{ url_for('admin.settings_retention_run_now') }}", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+          retention_days: n,
+          action: action(),
+          anonymize_delete_photo: delPhoto
+        })
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || "Falha");
+      alert(`Concluído. Afetados: ${data.affected}`);
+      simResult.innerText = data.affected;
+    } catch (e) {
+      alert(e.message || "Erro");
+    } finally {
+      btnRunNow.disabled = false;
+    }
+  }
+
+  days.addEventListener("input", updateSummary);
+  deleteRadio.addEventListener("change", () => { updateAnonymizeVisibility(); updateSummary(); });
+  anonymRadio.addEventListener("change", () => { updateAnonymizeVisibility(); updateSummary(); });
+  btnRecalc.addEventListener("click", simulate);
+  btnRunNow.addEventListener("click", runNow);
+
+  updateAnonymizeVisibility();
+  updateSummary();
+})();
+</script>

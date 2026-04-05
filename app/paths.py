@@ -100,6 +100,10 @@ def icon_path() -> str:
 # Constantes — Diretórios da Aplicação
 # ─────────────────────────────────────────────────────────────────────
 
+# ─────────────────────────────────────────────────────────────────────
+# Constantes — Diretórios da Aplicação
+# ─────────────────────────────────────────────────────────────────────
+
 APP_DIR     = _get_base_dir()        # Diretório raiz da aplicação
 DB_DIR      = APP_DIR / "db"         # Banco de dados SQLite
 UPLOADS_DIR = APP_DIR / "uploads"    # Fotos de visitantes (por CPF)
@@ -107,9 +111,16 @@ LOG_DIR     = APP_DIR / "logs"       # Arquivos de log
 CONFIG_DIR  = APP_DIR / "config"     # Configurações (settings.json)
 BACKUP_DIR  = APP_DIR / "backups"    # Backups do banco de dados
 UPDATE_DIR  = APP_DIR / "update"     # Arquivo temporário do instalador baixado
+EXPORTS_DIR = APP_DIR / "exports"    # JSON exportados (config + visitantes)
+IMPORTS_DIR = APP_DIR / "imports"    # Arquivos recebidos via upload
+CACHE_DIR   = APP_DIR / "cache"      # Arquivos temporários
 
 # Tupla com todos os diretórios que devem ser criados na inicialização.
-_ALL_DIRS = (DB_DIR, UPLOADS_DIR, LOG_DIR, CONFIG_DIR, BACKUP_DIR, UPDATE_DIR)
+_ALL_DIRS = (
+    DB_DIR, UPLOADS_DIR, LOG_DIR, CONFIG_DIR,
+    BACKUP_DIR, UPDATE_DIR, EXPORTS_DIR, IMPORTS_DIR, CACHE_DIR,
+)
+
 
 
 # =====================================================================

@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+  /* Aba ativa no menu lateral — cinza ao invés de azul */
+  #settings-tabs .list-group-item.active {
+    background-color: #e9ecef;
+    border-color: #dee2e6;
+    color: #212529;
+  }
+  #settings-tabs .list-group-item.active i {
+    color: #495057;
+  }
+</style>
+
+<div class="container-fluid px-3 px-md-4 py-3">
+  <div class="row g-3">
+
+    {# ════════════════════════════════════════════════════════════════
+       SIDEBAR — Menu de categorias (abas)
+       ════════════════════════════════════════════════════════════════ #}
+    <aside class="col-12 col-lg-3 col-xl-2">
+      <div class="card shadow-sm border-0 overflow-hidden">
+        <div class="card-header bg-dark text-white py-2">
+          <i class="bi bi-gear me-2"></i>
+          <span class="fw-semibold small">Configurações</span>
+        </div>
+        <div class="list-group list-group-flush" id="settings-tabs">
+          {% for tab in tabs %}
+          <a href="{{ url_for('admin.settings_page', tab_key=tab.key) }}"
+             class="list-group-item list-group-item-action d-flex align-items-center gap-2 py-2 px-3
+                    {% if tab.key == active_tab %}active{% endif %}">
+            <i class="bi {{ tab.icon }}"></i>
+            <span class="small fw-semibold">{{ tab.label }}</span>
+          </a>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="mt-2">
+        <a href="{{ url_for('visitor.identify') }}"
+           class="btn btn-outline-secondary btn-sm w-100">
+          <i class="bi bi-arrow-left me-1"></i>Voltar ao sistema
+        </a>
+      </div>
+    </aside>
+
+    {# ════════════════════════════════════════════════════════════════
+       CONTEÚDO — Seções da aba selecionada
+       ════════════════════════════════════════════════════════════════ #}
+    <div class="col-12 col-lg-9 col-xl-10">
+
+      {# Cabeçalho da aba #}
+      <div class="mb-3">
+        <h1 class="h4 mb-1">
+          <i class="bi {{ current_tab.icon }} me-2"></i>{{ current_tab.label }}
+        </h1>
+        <div class="text-muted small">{{ current_tab.description }}</div>
+      </div>
+
+      {# Flash messages #}
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for category, message in messages %}
+            <div class="alert alert-{{ category }} alert-dismissible fade show small py-2" role="alert">
+              {{ message }}
+              <button type="button" class="btn-close btn-close-sm" data-bs-dismiss="alert"></button>
+            </div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
+
+      {# Seções (subcategorias) — inclui partials dinamicamente #}
+      {% for section in current_tab.sections %}
+      <div class="card shadow-sm border-0 mb-3" id="section-{{ section.key }}">
+        <div class="card-header bg-white d-flex align-items-center gap-2 py-2">
+          {% if section.icon %}
+          <i class="bi {{ section.icon }} text-primary"></i>
+          {% endif %}
+          <span class="fw-semibold">{{ section.label }}</span>
+        </div>
+        <div class="card-body">
+          {% include section.template ignore missing %}
+        </div>
+      </div>
+      {% endfor %}
+
+    </div>
+  </div>
+</div>
+{% endblock %}

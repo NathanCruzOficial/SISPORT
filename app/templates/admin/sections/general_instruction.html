@@ -1,0 +1,32 @@
+<form method="post" action="{{ url_for('admin.save_general') }}">
+  <div class="row g-3">
+    <div class="col-12">
+      <label class="form-label fw-semibold small">Nome completo da Instituição</label>
+      <input type="text" name="inst_name" class="form-control"
+             value="{{ settings.inst_name }}">
+    </div>
+    <div class="col-12 col-md-6">
+      <label class="form-label fw-semibold small">Nome Abreviado</label>
+      <input type="text" name="inst_short_name" class="form-control"
+             value="{{ settings.inst_short_name }}">
+    </div>
+    <div class="col-12 col-md-6">
+      <label class="form-label fw-semibold small">Cabeçalho — Linha 1</label>
+      <input type="text" name="header_line_1" class="form-control"
+             value="{{ settings.header_line_1 }}"
+             placeholder="Ex: Ministério da Defesa">
+    </div>
+    <div class="col-12 col-md-6">
+      <label class="form-label fw-semibold small">Cabeçalho — Linha 2</label>
+      <input type="text" name="header_line_2" class="form-control"
+             value="{{ settings.header_line_2 }}"
+             placeholder="Ex: Exército Brasileiro">
+    </div>
+  </div>
+
+  <div class="mt-3 text-end">
+    <button type="submit" class="btn btn-primary btn-sm">
+      <i class="bi bi-check-lg me-1"></i>Salvar
+    </button>
+  </div>
+</form>
