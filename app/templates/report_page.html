@@ -1,0 +1,321 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container-fluid px-3 px-md-4 py-3">
+  <div class="row g-3">
+
+    {# ════════════════════════════════════════════════════════════════ #}
+    {# SIDEBAR — Filtros                                               #}
+    {# ════════════════════════════════════════════════════════════════ #}
+    <aside class="col-12 col-lg-3">
+      <div class="card shadow-sm border-0">
+        <div class="card-header bg-dark text-white d-flex align-items-center gap-2 py-2">
+          <i class="bi bi-funnel"></i>
+          <span class="fw-semibold">Filtros</span>
+        </div>
+        <div class="card-body">
+          <form method="get" action="{{ url_for('visitor.report_page') }}" id="filter-form">
+
+            {# ── Período ────────────────────────────────────────── #}
+            <div class="mb-3">
+              <label class="form-label fw-semibold small mb-1">
+                <i class="bi bi-calendar-range me-1"></i>Período
+              </label>
+              <div class="d-flex gap-2">
+                <div class="flex-fill">
+                  <label class="form-label text-muted small mb-0">De</label>
+                  <input type="date" name="date_from" class="form-control form-control-sm"
+                         value="{{ filters.date_from }}">
+                </div>
+                <div class="flex-fill">
+                  <label class="form-label text-muted small mb-0">Até</label>
+                  <input type="date" name="date_to" class="form-control form-control-sm"
+                         value="{{ filters.date_to }}">
+                </div>
+              </div>
+            </div>
+
+            {# ── Atalhos de período ─────────────────────────────── #}
+            <div class="mb-3 d-flex flex-wrap gap-1">
+              <button type="button" class="btn btn-outline-secondary btn-sm flex-fill date-shortcut"
+                      data-range="today">Hoje</button>
+              <button type="button" class="btn btn-outline-secondary btn-sm flex-fill date-shortcut"
+                      data-range="yesterday">Ontem</button>
+              <button type="button" class="btn btn-outline-secondary btn-sm flex-fill date-shortcut"
+                      data-range="week">Semana</button>
+              <button type="button" class="btn btn-outline-secondary btn-sm flex-fill date-shortcut"
+                      data-range="month">Mês</button>
+            </div>
+
+            <hr class="my-2">
+
+            {# ── Busca ──────────────────────────────────────────── #}
+            <div class="mb-3">
+              <label class="form-label fw-semibold small mb-1">
+                <i class="bi bi-search me-1"></i>Busca
+              </label>
+              <input type="text" name="search" class="form-control form-control-sm"
+                     placeholder="Nome, CPF, telefone ou destino..."
+                     value="{{ filters.search }}" autocomplete="off">
+            </div>
+
+            <hr class="my-2">
+
+            {# ── Status ─────────────────────────────────────────── #}
+            <div class="mb-3">
+              <label class="form-label fw-semibold small mb-1">
+                <i class="bi bi-circle-fill me-1"></i>Status
+              </label>
+              <select name="status" class="form-select form-select-sm">
+                <option value="all"    {{ 'selected' if filters.status == 'all' }}>Todos</option>
+                <option value="open"   {{ 'selected' if filters.status == 'open' }}>Em aberto</option>
+                <option value="closed" {{ 'selected' if filters.status == 'closed' }}>Finalizados</option>
+              </select>
+            </div>
+
+            {# ── Categoria ──────────────────────────────────────── #}
+            <div class="mb-3">
+              <label class="form-label fw-semibold small mb-1">
+                <i class="bi bi-people me-1"></i>Categoria
+              </label>
+              <select name="category" class="form-select form-select-sm">
+                <option value="all"        {{ 'selected' if filters.category == 'all' }}>Todas</option>
+                <option value="civil"      {{ 'selected' if filters.category == 'civil' }}>Civil</option>
+                <option value="militar"    {{ 'selected' if filters.category == 'militar' }}>Militar</option>
+                <option value="ex-militar" {{ 'selected' if filters.category == 'ex-militar' }}>Ex-Militar</option>
+              </select>
+            </div>
+
+            <hr class="my-2">
+
+            {# ── Ações ──────────────────────────────────────────── #}
+            <div class="d-grid gap-2">
+              <button type="submit" class="btn btn-primary btn-sm">
+                <i class="bi bi-funnel me-1"></i>Aplicar filtros
+              </button>
+              <a href="{{ url_for('visitor.report_page') }}" class="btn btn-outline-secondary btn-sm">
+                <i class="bi bi-x-circle me-1"></i>Limpar filtros
+              </a>
+            </div>
+
+          </form>
+        </div>
+      </div>
+    </aside>
+
+    {# ════════════════════════════════════════════════════════════════ #}
+    {# CONTEÚDO PRINCIPAL — Tabela de visitas                          #}
+    {# ════════════════════════════════════════════════════════════════ #}
+    <div class="col-12 col-lg-9">
+
+      {# ── Cabeçalho ────────────────────────────────────────────── #}
+      <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-3">
+        <div>
+          <h1 class="h4 mb-1">{{ title }}</h1>
+          <div class="d-flex gap-2 flex-wrap">
+            <span class="badge text-bg-primary">{{ total }} registro{{ 's' if total != 1 }}</span>
+            <span class="badge text-bg-success">{{ open_count }} em aberto</span>
+            <span class="badge text-bg-secondary">{{ closed_count }} finalizado{{ 's' if closed_count != 1 }}</span>
+          </div>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+          <a class="btn btn-primary btn-sm"
+            href="{{ url_for('visitor.report_print', **filters) }}">
+            <i class="bi bi-printer me-1"></i>Imprimir
+          </a>
+          <a class="btn btn-outline-success btn-sm" href="{{ url_for('visitor.open_visits') }}">
+            <i class="bi bi-door-open me-1"></i>Em Aberto
+          </a>
+          <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('visitor.identify') }}">
+            <i class="bi bi-arrow-left me-1"></i>Início
+          </a>
+        </div>
+      </div>
+
+      {# ── Filtros ativos (pills) ───────────────────────────────── #}
+      {% set has_active = filters.search or filters.status != 'all' or filters.category != 'all' %}
+      {% if has_active %}
+      <div class="d-flex flex-wrap gap-1 mb-3">
+        <small class="text-muted me-1 align-self-center">Filtros ativos:</small>
+        {% if filters.search %}
+          <span class="badge text-bg-info">
+            <i class="bi bi-search me-1"></i>"{{ filters.search }}"
+          </span>
+        {% endif %}
+        {% if filters.status == 'open' %}
+          <span class="badge text-bg-success">Em aberto</span>
+        {% elif filters.status == 'closed' %}
+          <span class="badge text-bg-secondary">Finalizados</span>
+        {% endif %}
+        {% if filters.category != 'all' %}
+          <span class="badge text-bg-warning text-dark">{{ filters.category|capitalize }}</span>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      {# ── Tabela ───────────────────────────────────────────────── #}
+      {% if visits|length > 0 %}
+      <div class="card shadow-sm border-0">
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0" id="visits-table">
+            <thead class="table-light">
+              <tr>
+                <th style="width:36px;"></th>
+                <th style="width:64px;">Foto</th>
+                <th>Visitante</th>
+                <th>Destino</th>
+                <th>Entrada</th>
+                <th>Saída</th>
+                <th style="width:120px;">Tempo</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for v in visits %}
+              <tr>
+                {# Status #}
+                <td>
+                  {% if not v.check_out %}
+                    <span class="badge text-bg-success" title="Dentro da instalação">●</span>
+                  {% else %}
+                    <span class="badge text-bg-secondary" title="Saída registrada">●</span>
+                  {% endif %}
+                </td>
+
+                {# Foto #}
+                <td>
+                  <div class="photo-box" style="width:48px;height:48px;border-radius:12px;">
+                    {% if v.visitor.photo_rel_path %}
+                      <img src="{{ url_for('visitor.uploaded_file', filename=v.visitor.photo_rel_path) }}?v={{ v.visitor.id }}" alt="Foto">
+                    {% else %}
+                      <img src="{{ url_for('static', filename='img/avatar-placeholder.jpg') }}">
+                    {% endif %}
+                  </div>
+                </td>
+
+                {# Dados do visitante #}
+                <td>
+                  <div class="fw-semibold">{{ v.visitor.name }}</div>
+                  <div class="text-muted small">
+                    <i class="bi bi-person-vcard"></i> {{ v.visitor.cpf }}
+                  </div>
+                  <div class="text-muted small">
+                    <i class="bi bi-telephone"></i> {{ v.visitor.phone }}
+                  </div>
+                  {% if v.visitor.category and v.visitor.category != 'civil' %}
+                  <div class="small">
+                    <span class="badge text-bg-warning text-dark">{{ v.visitor.category|capitalize }}</span>
+                  </div>
+                  {% endif %}
+                </td>
+
+                {# Destino #}
+                <td>{{ v.destination }}</td>
+
+                {# Entrada #}
+                <td class="small">{{ v.check_in.strftime("%d/%m/%Y %H:%M:%S") }}</td>
+
+                {# Saída #}
+                <td class="small">
+                  {% if v.check_out %}
+                    {{ v.check_out.strftime("%d/%m/%Y %H:%M:%S") }}
+                  {% else %}
+                    <span class="text-muted">—</span>
+                  {% endif %}
+                </td>
+
+                {# Timer #}
+                <td>
+                  <span class="font-monospace {% if not v.check_out %}text-success fw-semibold{% endif %}"
+                        data-timer="1"
+                        data-checkin="{{ v.check_in.isoformat() }}"
+                        {% if v.check_out %}data-checkout="{{ v.check_out.isoformat() }}"{% endif %}>
+                    --
+                  </span>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {% else %}
+      <div class="card shadow-sm border-0">
+        <div class="text-center text-muted py-5">
+          <i class="bi bi-inbox fs-1 d-block mb-2 opacity-50"></i>
+          Nenhuma visita encontrada para os filtros selecionados.
+        </div>
+      </div>
+      {% endif %}
+
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // ── Timer ──────────────────────────────────────────────────────────
+  function pad2(n){ return String(n).padStart(2,"0"); }
+  function fmtDuration(ms){
+    ms=Math.max(0,ms);
+    const t=Math.floor(ms/1000), h=Math.floor(t/3600),
+          m=Math.floor((t%3600)/60), s=t%60;
+    return `${pad2(h)}:${pad2(m)}:${pad2(s)}`;
+  }
+  function tickTimers(){
+    const now=Date.now();
+    document.querySelectorAll('[data-timer="1"]').forEach(el=>{
+      const cin=new Date(el.dataset.checkin).getTime();
+      const cout=el.dataset.checkout?new Date(el.dataset.checkout).getTime():null;
+      el.textContent=fmtDuration((cout??now)-cin);
+    });
+  }
+  tickTimers(); setInterval(tickTimers,1000);
+
+  // ── Atalhos de data ────────────────────────────────────────────────
+  (function(){
+    const form     = document.getElementById("filter-form");
+    const dateFrom = form.querySelector('[name="date_from"]');
+    const dateTo   = form.querySelector('[name="date_to"]');
+
+    function toISO(d){ return d.toISOString().slice(0,10); }
+
+    document.querySelectorAll(".date-shortcut").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const range = btn.dataset.range;
+        const today = new Date();
+        let from, to;
+
+        switch(range){
+          case "today":
+            from = to = today;
+            break;
+          case "yesterday":
+            const y = new Date(today);
+            y.setDate(y.getDate()-1);
+            from = to = y;
+            break;
+          case "week":
+            const w = new Date(today);
+            w.setDate(w.getDate()-6);
+            from = w; to = today;
+            break;
+          case "month":
+            const m = new Date(today.getFullYear(), today.getMonth(), 1);
+            from = m; to = today;
+            break;
+        }
+
+        dateFrom.value = toISO(from);
+        dateTo.value   = toISO(to);
+
+        // Destaca o botão ativo
+        document.querySelectorAll(".date-shortcut").forEach(b =>
+          b.classList.remove("btn-primary","text-white"));
+        btn.classList.add("btn-primary","text-white");
+        btn.classList.remove("btn-outline-secondary");
+      });
+    });
+  })();
+</script>
+{% endblock %}

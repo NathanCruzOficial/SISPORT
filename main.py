@@ -48,6 +48,7 @@ ensure_app_dirs()
 # Variáveis Globais — Logging
 # =====================================================================
 
+
 # Caminho absoluto do arquivo de log da aplicação.
 LOG_FILE = log_path()
 

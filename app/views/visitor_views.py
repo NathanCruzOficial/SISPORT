@@ -156,10 +156,7 @@ def checkin_form(visitor_id: int):
 def checkout(visit_id: int):
     """
     Registra a saída (check-out) de uma visita em aberto e redireciona
-    para a listagem de visitas abertas.
-
-    :param visit_id: (int) ID da visita na URL.
-    :return: Redirect para open_visits.
+    de volta para a listagem de visitas abertas.
     """
     try:
         checkout_visit(visit_id)
@@ -296,63 +293,243 @@ def uploaded_file(filename):
     return send_from_directory(base, filename)
 
 
+
 # =====================================================================
-# Rotas — Listagens e Relatórios
+# Rotas — Visitas em Aberto (Controle em tempo real)
 # =====================================================================
 
 @visitor_bp.route("/open", methods=["GET"])
 def open_visits():
     """
-    Lista todas as visitas em aberto (sem check-out registrado),
-    ordenadas pela entrada mais recente. Permite dar baixa (check-out).
-
-    :return: Template 'report_day.html' com visitas abertas e botão de checkout.
+    Lista todas as visitas em aberto (sem check-out) com controle
+    de saída e edição. Página dedicada ao monitoramento em tempo real.
     """
+    # Visitas em aberto
     open_list = (
         db.session.query(Visit)
         .filter(Visit.check_out.is_(None))
-        .order_by(Visit.check_in.desc())
+        .order_by(Visit.check_in.asc())  # mais antiga primeiro
         .all()
     )
-    return render_template(
-        "report_day.html",
-        visits=open_list,
-        title="Visitas em aberto",
-        show_checkout=True,
+
+    # Contagens do dia para os cards de resumo
+    today = date.today()
+    today_visits = (
+        db.session.query(Visit)
+        .filter(db.func.date(Visit.check_in) == today)
+        .all()
     )
+    checked_out_today = sum(1 for v in today_visits if v.check_out is not None)
+
+    return render_template(
+        "open_visits.html",
+        visits=open_list,
+        today_count=len(today_visits),
+        checked_out_today=checked_out_today,
+    )
+
+
+
+# =====================================================================
+# Rotas — Relatório Unificado com Filtros
+# =====================================================================
+
+@visitor_bp.route("/report", methods=["GET"])
+def report_page():
+    """
+    Relatório unificado com filtros de período, busca por nome/CPF,
+    status (abertos/finalizados/todos) e destino.
+    Parâmetros via query string para permitir bookmarks e compartilhamento.
+    """
+    from datetime import timedelta
+
+    # ── Parâmetros de filtro ──────────────────────────────────────────
+    date_from = request.args.get("date_from", "")
+    date_to   = request.args.get("date_to", "")
+    search    = request.args.get("search", "").strip()
+    status    = request.args.get("status", "all")       # all | open | closed
+    category  = request.args.get("category", "all")     # all | civil | militar | ex-militar
+
+    
+    # Defaults: se nenhuma data informada, usa hoje
+    today = date.today()
+    try:
+        dt_from = datetime.strptime(date_from, "%Y-%m-%d").date() if date_from else today
+    except ValueError:
+        dt_from = today
+    try:
+        dt_to = datetime.strptime(date_to, "%Y-%m-%d").date() if date_to else today
+    except ValueError:
+        dt_to = today
+
+    # Garante que dt_from <= dt_to
+    if dt_from > dt_to:
+        dt_from, dt_to = dt_to, dt_from
+
+    # ── Query base ────────────────────────────────────────────────────
+    query = (
+        db.session.query(Visit)
+        .join(Visitor, Visit.visitor_id == Visitor.id)
+        .filter(db.func.date(Visit.check_in) >= dt_from)
+        .filter(db.func.date(Visit.check_in) <= dt_to)
+    )
+
+    # Filtro de status
+    if status == "open":
+        query = query.filter(Visit.check_out.is_(None))
+    elif status == "closed":
+        query = query.filter(Visit.check_out.isnot(None))
+
+    # Filtro de categoria
+    if category in ("civil", "militar", "ex-militar"):
+        query = query.filter(Visitor.category == category)
+
+    # Filtro de busca (nome, CPF ou destino)
+    if search:
+        like = f"%{search}%"
+        query = query.filter(
+            db.or_(
+                Visitor.name.ilike(like),
+                Visitor.cpf.like(like),
+                Visit.destination.ilike(like),
+                Visitor.phone.like(like),
+            )
+        )
+
+    visits = query.order_by(Visit.check_in.desc()).all()
+
+    # ── Contadores para os badges ─────────────────────────────────────
+    total    = len(visits)
+    open_ct  = sum(1 for v in visits if v.check_out is None)
+    closed_ct = total - open_ct
+
+    # ── Título dinâmico ───────────────────────────────────────────────
+    if dt_from == dt_to == today:
+        title = "Relatório de Hoje"
+    elif dt_from == dt_to:
+        title = f"Relatório — {dt_from.strftime('%d/%m/%Y')}"
+    else:
+        title = f"Relatório — {dt_from.strftime('%d/%m/%Y')} a {dt_to.strftime('%d/%m/%Y')}"
+
+    # ── Filtros ativos (para manter estado no template) ───────────────
+    # Dentro de report_page(), onde monta o dict filters:
+    filters = {
+        "date_from":     dt_from.strftime("%Y-%m-%d"),
+        "date_to":       dt_to.strftime("%Y-%m-%d"),
+        "date_from_fmt": dt_from.strftime("%d/%m/%Y"),
+        "date_to_fmt":   dt_to.strftime("%d/%m/%Y"),
+        "search":        search,
+        "status":        status,
+        "category":      category,
+    }
+
+
+    return render_template(
+        "report_page.html",
+        visits=visits,
+        title=title,
+        filters=filters,
+        total=total,
+        open_count=open_ct,
+        closed_count=closed_ct,
+    )
+
+
+@visitor_bp.route("/report/print", methods=["GET"])
+def report_print():
+    """
+    Versão para impressão do relatório, usando os mesmos filtros
+    da query string. Passa filtros formatados para exibição no documento.
+    """
+    date_from = request.args.get("date_from", "")
+    date_to   = request.args.get("date_to", "")
+    search    = request.args.get("search", "").strip()
+    status    = request.args.get("status", "all")
+    category  = request.args.get("category", "all")
+
+    today = date.today()
+    try:
+        dt_from = datetime.strptime(date_from, "%Y-%m-%d").date() if date_from else today
+    except ValueError:
+        dt_from = today
+    try:
+        dt_to = datetime.strptime(date_to, "%Y-%m-%d").date() if date_to else today
+    except ValueError:
+        dt_to = today
+
+    if dt_from > dt_to:
+        dt_from, dt_to = dt_to, dt_from
+
+    # ── Query com filtros ─────────────────────────────────────────
+    query = (
+        db.session.query(Visit)
+        .join(Visitor, Visit.visitor_id == Visitor.id)
+        .filter(db.func.date(Visit.check_in) >= dt_from)
+        .filter(db.func.date(Visit.check_in) <= dt_to)
+    )
+
+    if status == "open":
+        query = query.filter(Visit.check_out.is_(None))
+    elif status == "closed":
+        query = query.filter(Visit.check_out.isnot(None))
+
+    if category in ("civil", "militar", "ex-militar"):
+        query = query.filter(Visitor.category == category)
+
+    if search:
+        like = f"%{search}%"
+        query = query.filter(
+            db.or_(
+                Visitor.name.ilike(like),
+                Visitor.cpf.like(like),
+                Visit.destination.ilike(like),
+                Visitor.phone.like(like),
+            )
+        )
+
+    visits = query.order_by(Visit.check_in.desc()).all()
+
+    # ── Contadores ────────────────────────────────────────────────
+    open_count   = sum(1 for v in visits if v.check_out is None)
+    closed_count = len(visits) - open_count
+
+    # ── Filtros para o template (valores brutos + formatados) ─────
+    filters = {
+        "date_from":     dt_from.strftime("%Y-%m-%d"),
+        "date_to":       dt_to.strftime("%Y-%m-%d"),
+        "date_from_fmt": dt_from.strftime("%d/%m/%Y"),
+        "date_to_fmt":   dt_to.strftime("%d/%m/%Y"),
+        "search":        search,
+        "status":        status,
+        "category":      category,
+    }
+
+    return render_template(
+        "print_day.html",
+        visits=visits,
+        today=today,
+        generated_at=datetime.now(),
+        filters=filters,
+        open_count=open_count,
+        closed_count=closed_count,
+    )
+
 
 
 @visitor_bp.route("/report/today", methods=["GET"])
 def report_today():
-    """
-    Exibe o relatório do dia atual com todas as visitas registradas,
-    utilizando o controller de relatórios.
+    """Redireciona para o relatório unificado filtrado por hoje."""
+    today = date.today().strftime("%Y-%m-%d")
+    return redirect(url_for("visitor.report_page", date_from=today, date_to=today))
 
-    :return: Template 'report_day.html' com visitas do dia (sem botão de checkout).
-    """
-    visits = day_report(date.today())
-    return render_template(
-        "report_day.html",
-        visits=visits,
-        title="Relatório de Hoje",
-        show_checkout=False,
-    )
 
 @visitor_bp.route("/report/today/print")
 def report_today_print():
-    """
-    Gera uma versão para impressão do relatório do dia atual,
-    com todas as visitas e horário de geração.
+    """Redireciona para impressão com filtro de hoje."""
+    today = date.today().strftime("%Y-%m-%d")
+    return redirect(url_for("visitor.report_print", date_from=today, date_to=today))
 
-    :return: Template 'print_day.html' com visitas do dia e timestamp de geração.
-    """
-    today = date.today()
-    visits = db.session.query(Visit).filter(
-        db.func.date(Visit.check_in) == today
-    ).order_by(Visit.check_in.desc()).all()
-    
-    generated_at = datetime.now()
-    return render_template('print_day.html', visits=visits, today=today, generated_at=generated_at)
+
 
 
 # =====================================================================

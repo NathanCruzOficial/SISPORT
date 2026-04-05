@@ -1,36 +1,7 @@
 <!-- =================================================================
   templates/print_day.html
-  Relatório Imprimível — Registro diário de entrada e saída de
-  visitantes em formato A4, otimizado para impressão (WeasyPrint
-  ou window.print do navegador).
-
-  IMPORTANTE: Este template NÃO herda de base.html.
-  É um documento HTML standalone com estilos próprios de impressão,
-  sem navbar, footer ou dependências do Bootstrap.
-
-  Variáveis de contexto esperadas:
-    visits       (list[Visit]) — Lista de visitas do dia, cada uma
-                   com: check_in, check_out, destination,
-                   visitor.name, visitor.phone, visitor.cpf
-    today        (date)        — Data de referência do relatório
-    generated_at (datetime|None) — Timestamp de geração; se None,
-                   um fallback JS preenche no navegador
-
-  Estrutura do documento impresso:
-    1. Cabeçalho institucional (Ministério da Defesa / EB / GUEs)
-    2. Metadados (data, geração, total de visitas)
-    3. Tabela de visitas (status, horários, tempo, dados, destino)
-    4. Bloco de conferência (nome, posto, assinatura)
-    5. Vistos (Of Dia, Adj Of Dia, Cmt Gda)
-
-  Recursos de impressão:
-    - @page A4 com margens de 12mm
-    - Numeração automática "Página X de Y" no rodapé
-    - Timestamp de geração no rodapé esquerdo
-    - Cabeçalho da tabela repete em cada página (table-header-group)
-    - Linhas não quebram no meio (page-break-inside: avoid)
-    - Bloco de assinatura nunca é quebrado entre páginas
-    - Elementos com classe .no-print são ocultados na impressão
+  Relatório Imprimível — Registro de entrada e saída de visitantes
+  com suporte a filtros (período, busca, status, categoria).
 ================================================================= -->
 
 <!doctype html>
@@ -42,14 +13,12 @@
 
   <!-- ===========================================================
        CSS de Impressão — Configuração @page (A4)
-       Rodapé automático com numeração de páginas e data de geração.
        =========================================================== -->
   <style>
     @page {
       size: A4;
-      margin: 12mm 12mm 20mm 12mm; /* margem inferior maior para rodapé */
+      margin: 12mm 12mm 20mm 12mm;
 
-      /* Rodapé central: numeração de páginas */
       @bottom-center {
         content: "Página " counter(page) " de " counter(pages);
         font-family: Arial, Helvetica, sans-serif;
@@ -60,7 +29,6 @@
         padding-top: 3px;
       }
 
-      /* Rodapé esquerdo: timestamp de geração */
       @bottom-left {
         content: "Gerado em: {{ generated_at.strftime('%d/%m/%Y %H:%M') if generated_at else '' }}";
         font-family: Arial, Helvetica, sans-serif;
@@ -74,15 +42,11 @@
        CSS Principal — Estilos do documento imprimível
        =========================================================== -->
   <style>
-
-    /* ===========================================================
-       Variáveis CSS — Paleta do documento
-       =========================================================== */
     :root{
-      --line: #8a8a8a;      /* cor das bordas da tabela */
-      --gray-1: #f3f3f3;    /* linhas pares (zebra) */
-      --gray-2: #ffffff;    /* linhas ímpares */
-      --text: #111;         /* cor do texto principal */
+      --line: #8a8a8a;
+      --gray-1: #f3f3f3;
+      --gray-2: #ffffff;
+      --text: #111;
     }
 
     body{
@@ -91,17 +55,11 @@
       font-size: 11px;
     }
 
-    /* ===========================================================
-       Utilitários tipográficos
-       =========================================================== */
     .mono{ font-family: "Courier New", Courier, monospace; }
     .center{ text-align: center; }
     .right{ text-align: right; }
 
-    /* ===========================================================
-       Barra de ações (tela) — Oculta na impressão via .no-print
-       Botões: Voltar (relatório) e Imprimir (window.print)
-       =========================================================== */
+    /* ── Barra de ações (tela) ─────────────────────────────────── */
     .topbar{
       display: flex;
       justify-content: space-between;
@@ -131,14 +89,11 @@
     }
     .btn-outline-dark:hover{ background: #f2f2f2; }
 
-    /* Classe utilitária: oculta elementos na impressão (botões, indicadores) */
     @media print{
       .no-print{ display: none !important; }
     }
 
-    /* ===========================================================
-       Cabeçalho Institucional — Ministério da Defesa / EB / GUEs
-       =========================================================== */
+    /* ── Cabeçalho Institucional ───────────────────────────────── */
     .doc-header{
       text-align: center;
       margin-top: 6px;
@@ -157,11 +112,6 @@
       font-size: 11px;
       margin: 2px 0;
     }
-    .unit-line{
-      font-weight: 700;
-      font-size: 11px;
-      margin: 2px 0;
-    }
     .doc-title{
       margin: 10px 0 6px 0;
       font-weight: 700;
@@ -170,9 +120,7 @@
       font-size: 20px;
     }
 
-    /* ===========================================================
-       Metadados — Faixa entre bordas com data, geração e total
-       =========================================================== */
+    /* ── Metadados ─────────────────────────────────────────────── */
     .doc-meta{
       display: flex;
       justify-content: space-between;
@@ -180,18 +128,39 @@
       border-top: 1px solid #000;
       border-bottom: 1px solid #000;
       padding: 6px 8px;
-      margin: 8px 0 10px 0;
+      margin: 8px 0 4px 0;
       font-size: 10.5px;
     }
 
-    /* ===========================================================
-       Tabela de Visitas — Listagem principal do relatório
-       Colunas: Status | Entrada | Saída | Tempo | Nome | Tel | CPF | Destino
-       =========================================================== */
+    /* ── Filtros aplicados ─────────────────────────────────────── */
+    .doc-filters{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 16px;
+      padding: 4px 8px 6px 8px;
+      margin: 0 0 10px 0;
+      font-size: 10px;
+      color: #444;
+      border-bottom: 1px dashed #aaa;
+    }
+    .doc-filters .filter-item{
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+    }
+    .doc-filters .filter-label{
+      font-weight: 700;
+      color: #222;
+    }
+    .doc-filters .filter-value{
+      font-family: "Courier New", Courier, monospace;
+    }
+
+    /* ── Tabela de Visitas ─────────────────────────────────────── */
     table{
       width: 100%;
       border-collapse: collapse;
-      page-break-inside: auto;         /* permite quebra entre linhas */
+      page-break-inside: auto;
     }
     th, td{
       border: 1px solid var(--line);
@@ -199,49 +168,36 @@
       line-height: 1.15;
       vertical-align: middle;
     }
-
-    /* Cabeçalho da tabela repete em cada página impressa */
     thead{ display: table-header-group; }
     thead th{
       background: #e9e9e9;
       font-weight: 700;
       text-align: left;
     }
-
-    /* Zebra striping: alternância de cores nas linhas */
     tbody tr:nth-child(odd){ background: var(--gray-2); }
     tbody tr:nth-child(even){ background: var(--gray-1); }
-
-    /* Evita quebra de página no meio de uma linha da tabela */
     tr{ page-break-inside: avoid; page-break-after: auto; }
 
-    /* Larguras fixas das colunas especiais */
-    .status-col{ width: 18px; text-align: center; }   /* bolinha de status */
-    .time-col{ width: 62px; text-align: center; }     /* entrada / saída */
-    .dur-col{ width: 84px; text-align: center; }      /* duração / telefone */
-    .cpf-col{ width: 120px; text-align: center; }     /* CPF formatado */
+    .status-col{ width: 18px; text-align: center; }
+    .time-col{ width: 62px; text-align: center; }
+    .dur-col{ width: 84px; text-align: center; }
+    .cpf-col{ width: 120px; text-align: center; }
 
-    /* ===========================================================
-       Indicadores de Status da Visita
-       - status-dot (vermelho): visitante ainda no aquartelamento
-       - status-empty (oco): visita finalizada (check-out realizado)
-       =========================================================== */
+    /* ── Status dots ───────────────────────────────────────────── */
     .status-dot{
       display: inline-block;
       width: 10px; height: 10px;
       border-radius: 50%;
       border: 1px solid #2a2a2a;
-      background: #ce1919;            /* vermelho = visita em aberto */
+      background: #ce1919;
     }
     .status-empty{
       display: inline-block;
       width: 10px; height: 10px;
       border-radius: 50%;
       border: 1px solid #888;
-      background: transparent;        /* vazio = visita finalizada */
+      background: transparent;
     }
-
-    /* Nome do visitante com ícone de alerta para visitas abertas */
     .name-wrap{
       display: flex;
       align-items: center;
@@ -249,7 +205,7 @@
     }
     .open-icon{
       font-weight: 700;
-      color: #ce1919;                 /* vermelho = alerta visual */
+      color: #ce1919;
       width: 14px;
       display: inline-block;
       text-align: center;
@@ -262,16 +218,39 @@
       padding-top: 6px;
     }
 
-    /* ===========================================================
-       Bloco de Conferência — Campos para preenchimento manual
-       (nome, posto/graduação, assinatura do responsável)
-       =========================================================== */
+    /* ── Resumo de contagens ───────────────────────────────────── */
+    .doc-summary{
+      display: flex;
+      justify-content: center;
+      gap: 24px;
+      margin: 10px 0;
+      font-size: 11px;
+    }
+    .summary-item{
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .summary-dot{
+      display: inline-block;
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      border: 1px solid #333;
+    }
+    .summary-dot.open{ background: #ce1919; }
+    .summary-dot.closed{ background: transparent; }
+    .summary-count{
+      font-family: "Courier New", Courier, monospace;
+      font-weight: 700;
+    }
+
+    /* ── Bloco de Conferência ──────────────────────────────────── */
     .conf-block{
       width: 100%;
       margin-top: 14mm;
       display: flex;
       justify-content: center;
-      page-break-inside: avoid;        /* nunca quebra no meio */
+      page-break-inside: avoid;
     }
     .conf-inner{
       width: 180mm;
@@ -295,14 +274,11 @@
     .conf-line .lbl{ min-width: 85px; }
     .conf-line .fill{
       flex: 1;
-      border-bottom: 1px solid #757575;  /* linha para escrita manual */
+      border-bottom: 1px solid #757575;
       height: 0.9em;
     }
 
-    /* ===========================================================
-       Vistos — Campos de assinatura para autoridades
-       Of Dia | Adj Of Dia | Cmt Gda
-       =========================================================== */
+    /* ── Vistos ────────────────────────────────────────────────── */
     .vistos{
       display: flex;
       justify-content: space-between;
@@ -322,39 +298,7 @@
     }
     .visto-label{ font-weight: 700; margin-top: 2mm; }
 
-    /* ===========================================================
-       Bloco de Assinatura — Nunca quebra entre páginas
-       =========================================================== */
-    .signature-block{
-      margin-top: 15px;
-      page-break-inside: avoid;
-      page-break-before: avoid;
-      page-break-after: avoid;
-    }
-    .signature-inner{
-      width: 120mm;
-      text-align: center;
-    }
-    .signature-line{
-      width: 70mm;
-      margin: 0 auto;
-      border-top: 2px solid #000;
-      height: 0;
-    }
-    .signature-name{
-      margin-top: 6px;
-      font-weight: 700;
-      text-transform: uppercase;
-    }
-    .signature-role{
-      font-size: 11px;
-    }
-
-    /* ===========================================================
-       Indicador de Preview (somente tela) — Mostra estimativa de
-       páginas (~25 linhas/página) no canto inferior esquerdo.
-       Oculto na impressão via classe .no-print.
-       =========================================================== */
+    /* ── Indicador de preview ──────────────────────────────────── */
     .page-indicator{
       position: fixed; bottom: 10px; left: 10px;
       background: #007cba; color: white; padding: 8px;
@@ -365,19 +309,14 @@
 
 <body>
 
-  <!-- ─────────────────────────────────────────────────────────────
-       Barra de Ações (somente tela) — Voltar ao relatório e imprimir.
-       Ocultada na impressão pela classe .no-print.
-       ───────────────────────────────────────────────────────────── -->
+  <!-- ── Barra de Ações (somente tela) ─────────────────────────── -->
   <div class="topbar no-print">
-    <a class="btn btn-outline-dark" href="{{ url_for('visitor.report_today') }}">Voltar</a>
-    <button class="btn btn-outline-gray" onclick="window.print()">Imprimir</button>
+    <a class="btn btn-outline-dark"
+       href="{{ url_for('visitor.report_page', **filters) }}">← Voltar ao relatório</a>
+    <button class="btn btn-outline-gray" onclick="window.print()">🖨 Imprimir</button>
   </div>
 
-  <!-- ─────────────────────────────────────────────────────────────
-       Cabeçalho Institucional — Hierarquia militar
-       Ministério da Defesa → Exército Brasileiro → GUEs/9ª Bda Inf Mtz
-       ───────────────────────────────────────────────────────────── -->
+  <!-- ── Cabeçalho Institucional ───────────────────────────────── -->
   <div class="doc-header">
     <div class="inst-line">Ministério da Defesa</div>
     <div class="inst-line">Exército Brasileiro</div>
@@ -385,12 +324,7 @@
     <div class="doc-title">Registro de entrada e saída de visitantes</div>
   </div>
 
-  <!-- ─────────────────────────────────────────────────────────────
-       Macro Jinja: dur_hms
-       Calcula a duração entre check_in e check_out e retorna no
-       formato HH:MM:SS. Retorna "- -" se não houver check_out
-       (visita ainda em aberto).
-       ───────────────────────────────────────────────────────────── -->
+  <!-- ── Macro de duração ──────────────────────────────────────── -->
   {% macro dur_hms(check_in, check_out) -%}
     {% if check_out %}
       {% set total = (check_out - check_in).total_seconds() | int %}
@@ -403,16 +337,17 @@
     {% endif %}
   {%- endmacro %}
 
-  <!-- ─────────────────────────────────────────────────────────────
-       Metadados do Documento — Data de referência, timestamp de
-       geração e contagem total de visitas do dia.
-       Se generated_at não for passado pelo backend, o fallback JS
-       preenche o campo no navegador (ver script no final).
-       ───────────────────────────────────────────────────────────── -->
+  <!-- ── Metadados ─────────────────────────────────────────────── -->
   <div class="doc-meta">
     <div>
-      Data do documento:
-      <span class="mono">{{ today.strftime("%d/%m/%Y") }}</span>
+      Período:
+      <span class="mono">
+        {% if filters.date_from == filters.date_to %}
+          {{ filters.date_from_fmt }}
+        {% else %}
+          {{ filters.date_from_fmt }} a {{ filters.date_to_fmt }}
+        {% endif %}
+      </span>
     </div>
 
     <div>
@@ -420,7 +355,6 @@
       {% if generated_at %}
         <span class="mono">{{ generated_at.strftime("%d/%m/%Y %H:%M") }}</span>
       {% else %}
-        <!-- Placeholder preenchido via JavaScript caso generated_at seja None -->
         <span class="mono" id="generatedAt">--/--/---- --:--</span>
       {% endif %}
     </div>
@@ -431,18 +365,53 @@
     </div>
   </div>
 
-  <!-- ─────────────────────────────────────────────────────────────
-       Tabela de Visitas — Listagem completa do dia
-       Colunas:
-         - Status   — Bolinha vermelha (aberta) ou vazia (finalizada)
-         - Entrada  — Horário de check-in (HH:MM:SS)
-         - Saída    — Horário de check-out ou "- -"
-         - Tempo    — Duração calculada via macro dur_hms
-         - Nome     — Com ícone "!!" se visita ainda aberta
-         - Telefone — Celular do visitante
-         - CPF      — Documento formatado
-         - Destino  — Local/pessoa visitada
-       ───────────────────────────────────────────────────────────── -->
+  <!-- ── Filtros Aplicados (visível na impressão) ──────────────── -->
+  {% set has_filters = filters.search or filters.status != 'all' or filters.category != 'all' %}
+  {% if has_filters %}
+  <div class="doc-filters">
+    <span style="font-weight:700;">Filtros:</span>
+    {% if filters.search %}
+      <span class="filter-item">
+        <span class="filter-label">Busca:</span>
+        <span class="filter-value">"{{ filters.search }}"</span>
+      </span>
+    {% endif %}
+    {% if filters.status == 'open' %}
+      <span class="filter-item">
+        <span class="filter-label">Status:</span>
+        <span class="filter-value">Em aberto</span>
+      </span>
+    {% elif filters.status == 'closed' %}
+      <span class="filter-item">
+        <span class="filter-label">Status:</span>
+        <span class="filter-value">Finalizados</span>
+      </span>
+    {% endif %}
+    {% if filters.category != 'all' %}
+      <span class="filter-item">
+        <span class="filter-label">Categoria:</span>
+        <span class="filter-value">{{ filters.category | capitalize }}</span>
+      </span>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <!-- ── Resumo de contagens ───────────────────────────────────── -->
+  <div class="doc-summary">
+    <div class="summary-item">
+      Total: <span class="summary-count">{{ visits|length }}</span>
+    </div>
+    <div class="summary-item">
+      <span class="summary-dot open"></span>
+      Em aberto: <span class="summary-count">{{ open_count }}</span>
+    </div>
+    <div class="summary-item">
+      <span class="summary-dot closed"></span>
+      Finalizados: <span class="summary-count">{{ closed_count }}</span>
+    </div>
+  </div>
+
+  <!-- ── Tabela de Visitas ─────────────────────────────────────── -->
   <table>
     <thead>
       <tr>
@@ -460,7 +429,6 @@
     <tbody>
       {% for v in visits %}
       <tr>
-        <!-- Coluna de status: dot vermelho = aberta, vazio = finalizada -->
         <td class="status-col">
           {% if not v.check_out %}
             <span class="status-dot" title="Ainda no aquartelamento">X</span>
@@ -469,20 +437,15 @@
           {% endif %}
         </td>
 
-        <!-- Horários de entrada e saída (monospace para alinhamento) -->
         <td class="mono center">{{ v.check_in.strftime("%H:%M:%S") }}</td>
         <td class="mono center">{% if v.check_out %}{{ v.check_out.strftime("%H:%M:%S") }}{% else %}--{% endif %}</td>
-
-        <!-- Duração calculada pela macro dur_hms -->
         <td class="mono center">{{ dur_hms(v.check_in, v.check_out) }}</td>
 
-        <!-- Nome do visitante com alerta visual para visitas abertas -->
         <td>
           <div class="name-wrap">
             {% if not v.check_out %}
               <span class="open-icon" title="Ainda não se retirou">!!</span>
             {% else %}
-              <!-- Espaçador invisível para manter alinhamento uniforme -->
               <span class="open-icon" style="visibility:hidden;">!!</span>
             {% endif %}
             <span>{{ v.visitor.name }}</span>
@@ -497,16 +460,18 @@
     </tbody>
   </table>
 
-  <!-- ─────────────────────────────────────────────────────────────
-       Bloco de Conferência — Preenchimento manual pelo responsável
-       da portaria (nome, posto/graduação, assinatura).
-       Nunca quebra entre páginas (page-break-inside: avoid).
-       ───────────────────────────────────────────────────────────── -->
+  <!-- ── Bloco vazio ───────────────────────────────────────────── -->
+  {% if visits|length == 0 %}
+  <div style="text-align:center; padding: 20px 0; font-size: 13px; color: #888;">
+    Nenhuma visita encontrada para os filtros selecionados.
+  </div>
+  {% endif %}
+
+  <!-- ── Bloco de Conferência ──────────────────────────────────── -->
   <div class="conf-block">
     <div class="conf-inner">
       <div class="conf-title">Responsável pela conferência:</div>
 
-      <!-- Linhas de preenchimento manual (impressas com underline) -->
       <div class="conf-lines">
         <div class="conf-line">
           <span class="lbl">Nome:</span><span class="fill"></span>
@@ -519,12 +484,6 @@
         </div>
       </div>
 
-      <!-- ─────────────────────────────────────────────────────────
-           Vistos — Campos de assinatura das autoridades de serviço:
-             - Oficial de Dia
-             - Adjunto do Oficial de Dia
-             - Comandante da Guarda
-           ───────────────────────────────────────────────────────── -->
       <div class="vistos">
         <div class="visto">
           <div class="visto-line"></div>
@@ -542,21 +501,12 @@
     </div>
   </div>
 
-  <!-- ─────────────────────────────────────────────────────────────
-       Indicador de Preview (somente tela) — Mostra quantidade de
-       visitas e estimativa de páginas (~25 linhas/página).
-       Oculto na impressão via classe .no-print.
-       ───────────────────────────────────────────────────────────── -->
+  <!-- ── Indicador de preview (somente tela) ───────────────────── -->
   <div class="page-indicator no-print">
-    📄 {{ visits|length }} visitas | Impressão: {{ visits|length//25 + 1 }} páginas estimadas
+    📄 {{ visits|length }} visitas | Impressão: ~{{ (visits|length // 25) + 1 }} página(s)
   </div>
 
-  <!-- ─────────────────────────────────────────────────────────────
-       Script Fallback — Preenche o campo "Gerado em" via JavaScript
-       caso o backend não tenha passado a variável generated_at.
-       Usa a data/hora local do navegador do usuário.
-       Oculto na impressão via classe .no-print no <script>.
-       ───────────────────────────────────────────────────────────── -->
+  <!-- ── Fallback JS para generated_at ─────────────────────────── -->
   {% if not generated_at %}
   <script class="no-print">
     (function(){
