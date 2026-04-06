@@ -33,9 +33,10 @@ class Visitor(db.Model):
     - phone            (String(20), NOT NULL):  Telefone de contato.
     - email            (String(254), UNIQUE):   E-mail (opcional, porém único se informado).
     - empresa          (String(120), NULL):     Empresa do visitante (opcional).
-    - photo_rel_path   (String(500), NULL):     Caminho relativo da foto armazenada.
-    - last_checkout_at (DateTime, NULL, IDX):   Data/hora da última saída registrada
-                                                (usado para política de retenção de dados).
+    - category         (String(20), NOT NULL):  Categoria: civil, militar ou ex-militar.
+    - photo_data       (LargeBinary, NULL):     Bytes da foto de perfil (JPEG/PNG).
+    - photo_mimetype   (String(32), NULL):      Mimetype da foto (ex: image/jpeg).
+    - last_checkout_at (DateTime, NULL, IDX):   Data/hora da última saída registrada.
 
     Relacionamentos:
     - visits: Lista de objetos Visit (1:N) — todas as visitas do visitante.
@@ -50,10 +51,9 @@ class Visitor(db.Model):
     # ── Categoria (militar / civil / ex-militar) ─────────────────────
     category = db.Column(db.String(20), nullable=False, default="civil")
 
-
     # ── Filiação ─────────────────────────────────────────────────────
-    father_name = db.Column(db.String(220), nullable=True)    # opcional
-    mom_name    = db.Column(db.String(220), nullable=False)   # obrigatório
+    father_name = db.Column(db.String(220), nullable=True)
+    mom_name    = db.Column(db.String(220), nullable=False)
 
     # ── Documentos e Contato ─────────────────────────────────────────
     cpf   = db.Column(db.String(16),  nullable=False, unique=True, index=True)
@@ -63,8 +63,9 @@ class Visitor(db.Model):
     # ── Empresa (opcional) ───────────────────────────────────────────
     empresa = db.Column(db.String(120), nullable=True)
 
-    # ── Foto ─────────────────────────────────────────────────────────
-    photo_rel_path = db.Column(db.String(500), nullable=True)
+    # ── Foto (armazenada como BLOB no banco) ─────────────────────────
+    photo_data     = db.Column(db.LargeBinary, nullable=True)
+    photo_mimetype = db.Column(db.String(32),  nullable=True)
 
     # ── Relacionamento 1:N com Visit ─────────────────────────────────
     visits = db.relationship("Visit", back_populates="visitor", lazy=True)
@@ -88,11 +89,11 @@ class Visit(db.Model):
     Enquanto check_out for NULL, a visita é considerada "em aberto".
 
     Colunas:
-    - id          (Integer, PK):          Identificador auto-incremento.
+    - id          (Integer, PK):               Identificador auto-incremento.
     - visitor_id  (Integer, FK → visitors.id): Referência ao visitante.
-    - destination (String(180), NOT NULL): Destino/setor da visita.
-    - check_in    (DateTime, NOT NULL):   Data/hora de entrada (default: agora).
-    - check_out   (DateTime, NULL):       Data/hora de saída (NULL = em aberto).
+    - destination (String(180), NOT NULL):     Destino/setor da visita.
+    - check_in    (DateTime, NOT NULL):        Data/hora de entrada.
+    - check_out   (DateTime, NULL):            Data/hora de saída (NULL = em aberto).
 
     Relacionamentos:
     - visitor: Objeto Visitor (N:1) — cadastro do visitante associado.
@@ -114,7 +115,6 @@ class Visit(db.Model):
     check_in  = db.Column(db.DateTime, default=datetime.now, nullable=False)
     check_out = db.Column(db.DateTime, nullable=True)
 
-
     # ─────────────────────────────────────────────────────────────────
     # Método — Verificação de Visita em Aberto
     # ─────────────────────────────────────────────────────────────────
@@ -126,3 +126,13 @@ class Visit(db.Model):
         :return: (bool) True se check_out é None, False caso contrário.
         """
         return self.check_out is None
+
+
+class TempPhoto(db.Model):
+    """Foto temporária do wizard — evita estourar o cookie de sessão."""
+    __tablename__ = "temp_photos"
+
+    id         = db.Column(db.String(64), primary_key=True)  # UUID da sessão wizard
+    photo_data = db.Column(db.LargeBinary)
+    photo_mimetype = db.Column(db.String(32), default="image/jpeg")
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)

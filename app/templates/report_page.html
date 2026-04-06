@@ -179,14 +179,18 @@
                     <span class="badge text-bg-secondary" title="Saída registrada">●</span>
                   {% endif %}
                 </td>
-
+                
                 {# Foto #}
                 <td>
                   <div class="photo-box" style="width:48px;height:48px;border-radius:12px;">
-                    {% if v.visitor.photo_rel_path %}
-                      <img src="{{ url_for('visitor.uploaded_file', filename=v.visitor.photo_rel_path) }}?v={{ v.visitor.id }}" alt="Foto">
+                    {% if v.visitor.photo_data %}
+                      <img src="{{ photo_url('visitor', v.visitor.id) }}"
+                          alt="Foto" class="rounded-3"
+                          style="width:40px; height:40px; object-fit:cover;">
                     {% else %}
-                      <img src="{{ url_for('static', filename='img/avatar-placeholder.jpg') }}">
+                      <img src="{{ url_for('static', filename='img/avatar-placeholder.jpg') }}"
+                          alt="Sem foto" class="rounded-3 opacity-50"
+                          style="width:40px; height:40px; object-fit:cover;">
                     {% endif %}
                   </div>
                 </td>

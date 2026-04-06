@@ -2,14 +2,13 @@
 # visitor_views.py
 # Views (Rotas) de Visitantes — Define todas as rotas do Blueprint
 # de visitantes, incluindo: identificação por CPF, wizard de cadastro
-# (3 etapas), check-in/check-out, servimento de uploads, relatórios
-# diários, edição/exclusão de visitantes e atualização de foto.
+# (3 etapas), check-in/check-out, foto via banco, relatórios,
+# edição/exclusão de visitantes e rotas internas.
 # =====================================================================
 
 # ─────────────────────────────────────────────────────────────────────
 # Imports
 # ─────────────────────────────────────────────────────────────────────
-import os
 from datetime import date, datetime
 
 from flask import (
@@ -20,14 +19,12 @@ from flask import (
     url_for,
     session,
     flash,
-    current_app,
     abort,
-    send_from_directory,
+    Response,
 )
-from werkzeug.utils import safe_join
 
 from ..extensions import db
-from ..models.visitor import Visitor, Visit
+from ..models.visitor import Visitor, Visit, TempPhoto
 from ..controllers.visitor_controller import (
     find_visitor_by_cpf,
     wizard_start_for_new_visitor,
@@ -39,17 +36,32 @@ from ..controllers.visitor_controller import (
     visitor_photo_update,
     _check_duplicate_fields,
 )
-from ..controllers.report_controller import day_report
 from ..utils.validators import normalize_cpf, is_valid_cpf, validate_required_email
 from sqlalchemy.exc import IntegrityError
 
 
 # ─────────────────────────────────────────────────────────────────────
-# Variáveis Globais — Blueprint
+# Blueprint + Context Processor
 # ─────────────────────────────────────────────────────────────────────
 
-# Blueprint principal de visitantes, registrado sem prefixo de URL.
 visitor_bp = Blueprint("visitor", __name__)
+
+
+@visitor_bp.app_context_processor
+def inject_photo_helper():
+    """
+    Injeta a função photo_url() em TODOS os templates.
+    Uso: <img src="{{ photo_url('visitor', visitor.id) }}">
+         <img src="{{ photo_url('temp', temp_id) }}">
+    """
+    from time import time
+
+    def photo_url(source, record_id):
+        return url_for(
+            "visitor.serve_photo", source=source, record_id=str(record_id)
+        ) + f"?t={int(time())}"
+
+    return {"photo_url": photo_url}
 
 
 # =====================================================================
@@ -62,9 +74,6 @@ def identify():
     Renderiza a tela inicial de identificação por CPF.
     Inclui dados de status geral e lista de visitas em aberto.
     """
-    from datetime import date
-
-    # Visitas em aberto (sem check-out)
     open_list = (
         db.session.query(Visit)
         .filter(Visit.check_out.is_(None))
@@ -72,7 +81,6 @@ def identify():
         .all()
     )
 
-    # Contagem de visitas do dia
     today = date.today()
     today_visits = (
         db.session.query(Visit)
@@ -80,10 +88,7 @@ def identify():
         .all()
     )
 
-    # Saídas registradas hoje
     checked_out_today = sum(1 for v in today_visits if v.check_out is not None)
-
-    # Total de visitantes cadastrados
     total_visitors = db.session.query(Visitor).count()
 
     return render_template(
@@ -100,11 +105,6 @@ def identify():
 def identify_post():
     """
     Processa o formulário de identificação por CPF.
-    Valida o CPF informado; se o visitante já existe, redireciona para
-    o check-in. Caso contrário, inicializa o wizard de novo cadastro.
-
-    :input: form['cpf'] — CPF digitado pelo usuário.
-    :return: Redirect para checkin_form (existente) ou wizard (novo).
     """
     raw_cpf = request.form.get("cpf", "")
     cpf = normalize_cpf(raw_cpf)
@@ -128,12 +128,7 @@ def identify_post():
 @visitor_bp.route("/checkin/<int:visitor_id>", methods=["GET", "POST"])
 def checkin_form(visitor_id: int):
     """
-    Exibe a ficha do visitante já cadastrado (GET) e registra uma nova
-    entrada/check-in (POST) com o destino informado.
-
-    :param visitor_id: (int) ID do visitante na URL.
-    :input: form['destination'] — Local/destino da visita (POST).
-    :return: Template 'checkin_existing.html' (GET) ou redirect para identify (POST).
+    Exibe formulário de check-in ou registra a entrada.
     """
     visitor = db.session.get(Visitor, visitor_id)
     if not visitor:
@@ -155,8 +150,7 @@ def checkin_form(visitor_id: int):
 @visitor_bp.route("/checkout/<int:visit_id>", methods=["POST"])
 def checkout(visit_id: int):
     """
-    Registra a saída (check-out) de uma visita em aberto e redireciona
-    de volta para a listagem de visitas abertas.
+    Registra a saída (check-out) de uma visita em aberto.
     """
     try:
         checkout_visit(visit_id)
@@ -174,9 +168,6 @@ def checkout(visit_id: int):
 def wizard():
     """
     Exibe o wizard de 3 etapas para novo cadastro de visitante.
-    Inicializa a sessão do wizard caso ainda não exista.
-
-    :return: Template 'visitor_wizard.html' com dados do wizard na sessão.
     """
     if "wizard" not in session:
         wizard_start_for_new_visitor()
@@ -186,12 +177,7 @@ def wizard():
 @visitor_bp.route("/wizard/step1", methods=["POST"])
 def wizard_step1():
     """
-    Processa o formulário da Etapa 1 do wizard (dados pessoais).
-    Delega a validação e persistência em sessão ao controller.
-
-    :input: form['name'], form['father_name'], form['mom_name'],
-            form['cpf'], form['phone'], form['email'], form['empresa'], form['category'].
-    :return: Redirect para wizard (avança para etapa 2 ou exibe erro).
+    Processa a Etapa 1 do wizard (dados pessoais).
     """
     try:
         wizard_step1_submit(
@@ -202,7 +188,7 @@ def wizard_step1():
             request.form.get("phone", ""),
             request.form.get("email", ""),
             request.form.get("empresa", ""),
-            request.form.get("category", "civil"),    # ← NOVO
+            request.form.get("category", "civil"),
         )
     except Exception as e:
         flash(str(e), "danger")
@@ -212,12 +198,7 @@ def wizard_step1():
 @visitor_bp.route("/wizard/step2", methods=["POST"])
 def wizard_step2():
     """
-    Processa a Etapa 2 do wizard: captura e salvamento da foto
-    vinculada ao CPF. Permite pular (skip) sem foto.
-
-    :input: form['skip'] — Se presente, pula a captura de foto.
-            form['photo_data_url'] — Foto em data URL base64 (opcional).
-    :return: Redirect para wizard (avança para etapa 3 ou exibe erro).
+    Processa a Etapa 2 do wizard: foto do visitante.
     """
     skip = request.form.get("skip")
     photo_data_url = None if skip else (request.form.get("photo_data_url") or "")
@@ -228,15 +209,13 @@ def wizard_step2():
     return redirect(url_for("visitor.wizard"))
 
 
-# ── NOVO: Navegar para trás entre etapas ──────────────────────────
 @visitor_bp.route("/wizard/back/<int:step>", methods=["GET"])
 def wizard_back(step: int):
-    """Volta o wizard para a etapa indicada (1 ou 2), sem perder dados."""
+    """Volta o wizard para a etapa indicada, sem perder dados."""
     w = session.get("wizard")
     if not w:
         return redirect(url_for("visitor.identify"))
 
-    # Só permite voltar para etapa anterior à atual
     target = max(1, min(step, w.get("step", 1)))
     w["step"] = target
     session["wizard"] = w
@@ -246,8 +225,7 @@ def wizard_back(step: int):
 @visitor_bp.route("/wizard/finish", methods=["POST"])
 def wizard_finish():
     """
-    Etapa final do wizard: cria o visitante no banco (se não existir)
-    e registra a primeira entrada (check-in). Limpa a sessão do wizard.
+    Etapa final do wizard: cria o visitante e registra check-in.
     """
     try:
         visitor = create_visitor_if_not_exists_from_wizard()
@@ -262,57 +240,65 @@ def wizard_finish():
         session.pop("wizard", None)
         return redirect(url_for("visitor.identify"))
 
-    except Exception as e:                    # ← MUDOU: era ValueError
+    except Exception as e:
         flash(str(e), "danger")
         return redirect(url_for("visitor.wizard"))
 
 
 # =====================================================================
-# Rotas — Servimento de Arquivos (Uploads / Fotos)
+# Rota ÚNICA — Foto (servida do banco de dados)
 # =====================================================================
 
-@visitor_bp.route("/uploads/<path:filename>", methods=["GET"])
-def uploaded_file(filename):
+@visitor_bp.route("/photo/<string:source>/<string:record_id>", methods=["GET"])
+def serve_photo(source, record_id):
     """
-    Serve arquivos de upload (fotos de visitantes). Se o arquivo não
-    existir no disco, retorna uma imagem placeholder padrão.
+    Rota única para servir qualquer foto do sistema como BLOB.
 
-    :param filename: (str) Caminho relativo do arquivo dentro de UPLOAD_FOLDER.
-    :return: Arquivo solicitado ou 'avatar-placeholder.jpg' como fallback.
+    Fontes suportadas:
+        /photo/visitor/42      → foto definitiva do visitante
+        /photo/temp/abc123     → foto temporária do wizard
     """
-    base = current_app.config["UPLOAD_FOLDER"]
-    full = safe_join(base, filename)
+    photo_data = None
+    photo_mime = None
 
-    # se não existir, devolve placeholder
-    if not full or not os.path.isfile(full):
-        return send_from_directory(
-            os.path.join(current_app.root_path, "static", "img"),
-            "avatar-placeholder.jpg",
-        )
+    if source == "visitor":
+        visitor = db.session.get(Visitor, int(record_id))
+        if visitor:
+            photo_data = visitor.photo_data
+            photo_mime = visitor.photo_mimetype
 
-    return send_from_directory(base, filename)
+    elif source == "temp":
+        photo = db.session.get(TempPhoto, record_id)
+        if photo:
+            photo_data = photo.photo_data
+            photo_mime = photo.photo_mimetype
 
+    if not photo_data:
+        abort(404)
+
+    return Response(
+        photo_data,
+        mimetype=photo_mime or "image/jpeg",
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 # =====================================================================
-# Rotas — Visitas em Aberto (Controle em tempo real)
+# Rotas — Visitas em Aberto
 # =====================================================================
 
 @visitor_bp.route("/open", methods=["GET"])
 def open_visits():
     """
-    Lista todas as visitas em aberto (sem check-out) com controle
-    de saída e edição. Página dedicada ao monitoramento em tempo real.
+    Lista todas as visitas em aberto (sem check-out).
     """
-    # Visitas em aberto
     open_list = (
         db.session.query(Visit)
         .filter(Visit.check_out.is_(None))
-        .order_by(Visit.check_in.asc())  # mais antiga primeiro
+        .order_by(Visit.check_in.asc())
         .all()
     )
 
-    # Contagens do dia para os cards de resumo
     today = date.today()
     today_visits = (
         db.session.query(Visit)
@@ -329,7 +315,6 @@ def open_visits():
     )
 
 
-
 # =====================================================================
 # Rotas — Relatório Unificado com Filtros
 # =====================================================================
@@ -337,109 +322,7 @@ def open_visits():
 @visitor_bp.route("/report", methods=["GET"])
 def report_page():
     """
-    Relatório unificado com filtros de período, busca por nome/CPF,
-    status (abertos/finalizados/todos) e destino.
-    Parâmetros via query string para permitir bookmarks e compartilhamento.
-    """
-    from datetime import timedelta
-
-    # ── Parâmetros de filtro ──────────────────────────────────────────
-    date_from = request.args.get("date_from", "")
-    date_to   = request.args.get("date_to", "")
-    search    = request.args.get("search", "").strip()
-    status    = request.args.get("status", "all")       # all | open | closed
-    category  = request.args.get("category", "all")     # all | civil | militar | ex-militar
-
-    
-    # Defaults: se nenhuma data informada, usa hoje
-    today = date.today()
-    try:
-        dt_from = datetime.strptime(date_from, "%Y-%m-%d").date() if date_from else today
-    except ValueError:
-        dt_from = today
-    try:
-        dt_to = datetime.strptime(date_to, "%Y-%m-%d").date() if date_to else today
-    except ValueError:
-        dt_to = today
-
-    # Garante que dt_from <= dt_to
-    if dt_from > dt_to:
-        dt_from, dt_to = dt_to, dt_from
-
-    # ── Query base ────────────────────────────────────────────────────
-    query = (
-        db.session.query(Visit)
-        .join(Visitor, Visit.visitor_id == Visitor.id)
-        .filter(db.func.date(Visit.check_in) >= dt_from)
-        .filter(db.func.date(Visit.check_in) <= dt_to)
-    )
-
-    # Filtro de status
-    if status == "open":
-        query = query.filter(Visit.check_out.is_(None))
-    elif status == "closed":
-        query = query.filter(Visit.check_out.isnot(None))
-
-    # Filtro de categoria
-    if category in ("civil", "militar", "ex-militar"):
-        query = query.filter(Visitor.category == category)
-
-    # Filtro de busca (nome, CPF ou destino)
-    if search:
-        like = f"%{search}%"
-        query = query.filter(
-            db.or_(
-                Visitor.name.ilike(like),
-                Visitor.cpf.like(like),
-                Visit.destination.ilike(like),
-                Visitor.phone.like(like),
-            )
-        )
-
-    visits = query.order_by(Visit.check_in.desc()).all()
-
-    # ── Contadores para os badges ─────────────────────────────────────
-    total    = len(visits)
-    open_ct  = sum(1 for v in visits if v.check_out is None)
-    closed_ct = total - open_ct
-
-    # ── Título dinâmico ───────────────────────────────────────────────
-    if dt_from == dt_to == today:
-        title = "Relatório de Hoje"
-    elif dt_from == dt_to:
-        title = f"Relatório — {dt_from.strftime('%d/%m/%Y')}"
-    else:
-        title = f"Relatório — {dt_from.strftime('%d/%m/%Y')} a {dt_to.strftime('%d/%m/%Y')}"
-
-    # ── Filtros ativos (para manter estado no template) ───────────────
-    # Dentro de report_page(), onde monta o dict filters:
-    filters = {
-        "date_from":     dt_from.strftime("%Y-%m-%d"),
-        "date_to":       dt_to.strftime("%Y-%m-%d"),
-        "date_from_fmt": dt_from.strftime("%d/%m/%Y"),
-        "date_to_fmt":   dt_to.strftime("%d/%m/%Y"),
-        "search":        search,
-        "status":        status,
-        "category":      category,
-    }
-
-
-    return render_template(
-        "report_page.html",
-        visits=visits,
-        title=title,
-        filters=filters,
-        total=total,
-        open_count=open_ct,
-        closed_count=closed_ct,
-    )
-
-
-@visitor_bp.route("/report/print", methods=["GET"])
-def report_print():
-    """
-    Versão para impressão do relatório, usando os mesmos filtros
-    da query string. Passa filtros formatados para exibição no documento.
+    Relatório unificado com filtros de período, busca, status e categoria.
     """
     date_from = request.args.get("date_from", "")
     date_to   = request.args.get("date_to", "")
@@ -460,7 +343,6 @@ def report_print():
     if dt_from > dt_to:
         dt_from, dt_to = dt_to, dt_from
 
-    # ── Query com filtros ─────────────────────────────────────────
     query = (
         db.session.query(Visit)
         .join(Visitor, Visit.visitor_id == Visitor.id)
@@ -489,11 +371,93 @@ def report_print():
 
     visits = query.order_by(Visit.check_in.desc()).all()
 
-    # ── Contadores ────────────────────────────────────────────────
+    total    = len(visits)
+    open_ct  = sum(1 for v in visits if v.check_out is None)
+    closed_ct = total - open_ct
+
+    if dt_from == dt_to == today:
+        title = "Relatório de Hoje"
+    elif dt_from == dt_to:
+        title = f"Relatório — {dt_from.strftime('%d/%m/%Y')}"
+    else:
+        title = f"Relatório — {dt_from.strftime('%d/%m/%Y')} a {dt_to.strftime('%d/%m/%Y')}"
+
+    filters = {
+        "date_from":     dt_from.strftime("%Y-%m-%d"),
+        "date_to":       dt_to.strftime("%Y-%m-%d"),
+        "date_from_fmt": dt_from.strftime("%d/%m/%Y"),
+        "date_to_fmt":   dt_to.strftime("%d/%m/%Y"),
+        "search":        search,
+        "status":        status,
+        "category":      category,
+    }
+
+    return render_template(
+        "report_page.html",
+        visits=visits,
+        title=title,
+        filters=filters,
+        total=total,
+        open_count=open_ct,
+        closed_count=closed_ct,
+    )
+
+
+@visitor_bp.route("/report/print", methods=["GET"])
+def report_print():
+    """
+    Versão para impressão do relatório.
+    """
+    date_from = request.args.get("date_from", "")
+    date_to   = request.args.get("date_to", "")
+    search    = request.args.get("search", "").strip()
+    status    = request.args.get("status", "all")
+    category  = request.args.get("category", "all")
+
+    today = date.today()
+    try:
+        dt_from = datetime.strptime(date_from, "%Y-%m-%d").date() if date_from else today
+    except ValueError:
+        dt_from = today
+    try:
+        dt_to = datetime.strptime(date_to, "%Y-%m-%d").date() if date_to else today
+    except ValueError:
+        dt_to = today
+
+    if dt_from > dt_to:
+        dt_from, dt_to = dt_to, dt_from
+
+    query = (
+        db.session.query(Visit)
+        .join(Visitor, Visit.visitor_id == Visitor.id)
+        .filter(db.func.date(Visit.check_in) >= dt_from)
+        .filter(db.func.date(Visit.check_in) <= dt_to)
+    )
+
+    if status == "open":
+        query = query.filter(Visit.check_out.is_(None))
+    elif status == "closed":
+        query = query.filter(Visit.check_out.isnot(None))
+
+    if category in ("civil", "militar", "ex-militar"):
+        query = query.filter(Visitor.category == category)
+
+    if search:
+        like = f"%{search}%"
+        query = query.filter(
+            db.or_(
+                Visitor.name.ilike(like),
+                Visitor.cpf.like(like),
+                Visit.destination.ilike(like),
+                Visitor.phone.like(like),
+            )
+        )
+
+    visits = query.order_by(Visit.check_in.desc()).all()
+
     open_count   = sum(1 for v in visits if v.check_out is None)
     closed_count = len(visits) - open_count
 
-    # ── Filtros para o template (valores brutos + formatados) ─────
     filters = {
         "date_from":     dt_from.strftime("%Y-%m-%d"),
         "date_to":       dt_to.strftime("%Y-%m-%d"),
@@ -515,10 +479,9 @@ def report_print():
     )
 
 
-
 @visitor_bp.route("/report/today", methods=["GET"])
 def report_today():
-    """Redireciona para o relatório unificado filtrado por hoje."""
+    """Redireciona para o relatório filtrado por hoje."""
     today = date.today().strftime("%Y-%m-%d")
     return redirect(url_for("visitor.report_page", date_from=today, date_to=today))
 
@@ -530,34 +493,14 @@ def report_today_print():
     return redirect(url_for("visitor.report_print", date_from=today, date_to=today))
 
 
-
-
 # =====================================================================
 # Rotas — Edição de Visitantes
 # =====================================================================
-
-def _safe_unlink(abs_path: str) -> None:
-    """
-    Remove um arquivo do disco de forma segura, ignorando erros caso
-    o arquivo não exista ou não possa ser removido.
-
-    :param abs_path: (str) Caminho absoluto do arquivo a ser removido.
-    :return: None.
-    """
-    try:
-        if abs_path and os.path.exists(abs_path):
-            os.remove(abs_path)
-    except OSError:
-        pass
-
 
 @visitor_bp.route("/visitors/<int:visitor_id>/edit", methods=["GET"])
 def visitor_edit(visitor_id):
     """
     Exibe o formulário de edição de um visitante existente.
-
-    :param visitor_id: (int) ID do visitante na URL.
-    :return: Template 'visitor_edit.html' com os dados do visitante.
     """
     v = db.session.get(Visitor, visitor_id)
     if not v:
@@ -565,24 +508,23 @@ def visitor_edit(visitor_id):
         return redirect(url_for("visitor.identify"))
     return render_template("visitor_edit.html", visitor=v)
 
+
 @visitor_bp.route("/visitors/<int:visitor_id>/edit", methods=["POST"])
 def visitor_edit_post(visitor_id):
     """
-    Processa o formulário de edição de visitante. Valida campos
-    obrigatórios, verifica duplicidade no banco (excluindo o próprio
-    visitante) e persiste as alterações.
+    Processa o formulário de edição de visitante.
     """
     v = db.session.get(Visitor, visitor_id)
     if not v:
         flash("Visitante não encontrado.", "warning")
         return redirect(url_for("visitor.identify"))
 
-    name = (request.form.get("name") or "").strip().upper()
-    phone = (request.form.get("phone") or "").strip()
-    mom_name = (request.form.get("mom_name") or "").strip().upper()
+    name        = (request.form.get("name") or "").strip().upper()
+    phone       = (request.form.get("phone") or "").strip()
+    mom_name    = (request.form.get("mom_name") or "").strip().upper()
     father_name = (request.form.get("father_name") or "").strip().upper()
-    empresa = (request.form.get("empresa") or "").strip().upper()
-    category = (request.form.get("category") or "civil").strip().lower()
+    empresa     = (request.form.get("empresa") or "").strip().upper()
+    category    = (request.form.get("category") or "civil").strip().lower()
 
     try:
         email = validate_required_email(request.form.get("email", ""))
@@ -603,28 +545,22 @@ def visitor_edit_post(visitor_id):
         flash("Categoria inválida.", "danger")
         return redirect(url_for("visitor.visitor_edit", visitor_id=v.id))
 
-    # ── Verificação de duplicidade (exclui o próprio visitante) ───
     try:
         _check_duplicate_fields(
-            name=name,
-            father_name=father_name,
-            mom_name=mom_name,
-            cpf=v.cpf,          # CPF não muda na edição
-            phone=phone,
-            email=email,
-            exclude_id=v.id,    # ← ignora ele mesmo na busca
+            name=name, father_name=father_name, mom_name=mom_name,
+            cpf=v.cpf, phone=phone, email=email, exclude_id=v.id,
         )
     except ValueError as e:
         flash(str(e), "danger")
         return redirect(url_for("visitor.visitor_edit", visitor_id=v.id))
 
-    v.name = name
-    v.phone = phone
-    v.email = email
-    v.mom_name = mom_name
+    v.name        = name
+    v.phone       = phone
+    v.email       = email
+    v.mom_name    = mom_name
     v.father_name = father_name or None
-    v.empresa = empresa or None
-    v.category = category  
+    v.empresa     = empresa or None
+    v.category    = category
 
     try:
         db.session.commit()
@@ -635,6 +571,7 @@ def visitor_edit_post(visitor_id):
 
     return redirect(url_for("visitor.visitor_edit", visitor_id=v.id))
 
+
 # =====================================================================
 # Rotas — Atualização de Foto de Visitante
 # =====================================================================
@@ -642,12 +579,7 @@ def visitor_edit_post(visitor_id):
 @visitor_bp.route("/visitors/<int:visitor_id>/photo", methods=["POST"])
 def visitor_update_photo(visitor_id):
     """
-    Recebe uma foto em formato data URL (base64) e atualiza a foto de
-    perfil do visitante. Pode ser chamada pela tela de edição ou wizard.
-
-    :param visitor_id: (int) ID do visitante na URL.
-    :input: form['photo_data_url'] — Foto em data URL base64.
-    :return: Redirect para visitor_edit com mensagem de sucesso ou erro.
+    Recebe uma foto em data URL (base64) e salva como BLOB no banco.
     """
     v = db.session.get(Visitor, visitor_id)
     if not v:
@@ -656,47 +588,13 @@ def visitor_update_photo(visitor_id):
 
     try:
         photo_url = request.form.get("photo_data_url", "")
-        print(f"Recebido photo_data_url: {photo_url[:30]}...")
-
         visitor_photo_update(v, photo_url)
-        flash("Foto atualizada.", "success")
-
-    except Exception as e:
-        db.session.rollback()  # bom ter, caso algo dê errado depois do commit (ou em evoluções futuras)
-        flash(str(e), "danger")
-
-    return redirect(url_for("visitor.visitor_edit", visitor_id=v.id))
-
-
-# ─────────────────────────────────────────────────────────────────────
-# Código legado comentado — versão anterior de visitor_update_photo
-# que realizava o salvamento direto via save_or_replace_profile_photo
-# sem delegar ao controller. Substituída pelo uso de
-# visitor_photo_update do controller.
-# ─────────────────────────────────────────────────────────────────────
-'''
-@visitor_bp.route("/visitors/<int:visitor_id>/photo", methods=["POST"])
-def visitor_update_photo(visitor_id):
-    v = db.session.get(Visitor, visitor_id)
-    if not v:
-        flash("Visitante não encontrado.", "warning")
-        return redirect(url_for("visitor.identify"))
-
-    try:
-        data_url = request.form.get("photo_data_url", "")  # padronize esse nome no HTML/JS
-        print(f"Recebido photo_data_url: {data_url[:30]}...")
-
-        rel_path = save_or_replace_profile_photo(data_url, v.cpf)
-        v.photo_rel_path = rel_path
-        db.session.commit()
-
         flash("Foto atualizada.", "success")
     except Exception as e:
         db.session.rollback()
         flash(str(e), "danger")
 
     return redirect(url_for("visitor.visitor_edit", visitor_id=v.id))
-'''
 
 
 # =====================================================================
@@ -706,31 +604,64 @@ def visitor_update_photo(visitor_id):
 @visitor_bp.route("/visitors/<int:visitor_id>/delete", methods=["POST"])
 def visitor_delete(visitor_id):
     """
-    Exclui um visitante e todos os seus registros de visita associados.
-    Remove também a foto do disco, se existir.
-
-    :param visitor_id: (int) ID do visitante na URL.
-    :return: Redirect para identify com mensagem de sucesso ou erro.
+    Exclui um visitante e todos os seus registros de visita.
     """
     v = db.session.get(Visitor, visitor_id)
     if not v:
         flash("Visitante não encontrado.", "warning")
         return redirect(url_for("visitor.identify"))
 
-    # Se você tiver relacionamento Visit -> Visitor com FK,
-    # o delete pode falhar se existirem visitas. Você pode:
-    # - apagar as visitas primeiro, ou
-    # - configurar cascade no model.
-    # Aqui vai o modo explícito (ajuste o nome do model/coluna):
     Visit.query.filter_by(visitor_id=v.id).delete()
-
-    # remove foto do disco
-    if v.photo_rel_path:
-        abs_path = os.path.join(current_app.root_path, "static", v.photo_rel_path)
-        _safe_unlink(abs_path)
-
     db.session.delete(v)
     db.session.commit()
 
     flash("Cadastro excluído.", "success")
     return redirect(url_for("visitor.identify"))
+
+
+# =====================================================================
+# Rotas Internas (somente acessíveis pelo próprio sistema)
+# =====================================================================
+
+def _is_local_request() -> bool:
+    """Verifica se a requisição originou-se do próprio servidor."""
+    return request.remote_addr in ("127.0.0.1", "::1")
+
+
+def internal_only(f):
+    """Decorator que restringe acesso a localhost."""
+    from functools import wraps
+
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not _is_local_request():
+            abort(403)
+        return f(*args, **kwargs)
+    return decorated
+
+
+@visitor_bp.route("/internal/stats", methods=["GET"])
+@internal_only
+def internal_stats():
+    """[ROTA INTERNA] Estatísticas básicas do sistema."""
+    from flask import jsonify
+
+    total_visitors = db.session.query(Visitor).count()
+    total_visits   = db.session.query(Visit).count()
+    open_visits    = db.session.query(Visit).filter(Visit.check_out.is_(None)).count()
+    with_photo     = db.session.query(Visitor).filter(Visitor.photo_data.isnot(None)).count()
+
+    return jsonify({
+        "total_visitors": total_visitors,
+        "total_visits":   total_visits,
+        "open_visits":    open_visits,
+        "with_photo":     with_photo,
+    })
+
+
+@visitor_bp.route("/internal/health", methods=["GET"])
+@internal_only
+def internal_health():
+    """[ROTA INTERNA] Health check."""
+    from flask import jsonify
+    return jsonify({"status": "ok", "timestamp": datetime.now().isoformat()})

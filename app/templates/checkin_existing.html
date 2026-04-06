@@ -31,13 +31,13 @@
           {# Foto 1:1 #}
               <div class="text-center flex-shrink-0">
                 <div class="photo-box mx-auto" style="width:150px;height:150px;border-radius:8px;">
-                  {% if visitor.photo_rel_path %}
-                    <img src="{{ url_for('visitor.uploaded_file', filename=visitor.photo_rel_path) }}"
-                        alt="Foto" class="w-100 h-100" style="object-fit:cover;">
-                  {% else %}
-                    <img src="{{ url_for('static', filename='img/avatar-placeholder.jpg') }}"
-                        alt="Sem foto" class="w-100 h-100 opacity-50" style="object-fit:cover;">
-                  {% endif %}
+                    {% if visitor.photo_data %}
+                      <img src="{{ photo_url('visitor', visitor.id) }}" ...>
+                    {% else %}
+                      <img src="{{ url_for('static', filename='img/avatar-placeholder.jpg') }}"
+                          alt="Sem foto" class="rounded-3 opacity-50"
+                          style="width:40px; height:40px; object-fit:cover;">
+                    {% endif %}
                   </div>
             <div class="mt-2">
               {% set cat = visitor.category|default('civil') %}

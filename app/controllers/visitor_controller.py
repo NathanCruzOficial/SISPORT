@@ -1,19 +1,23 @@
 # =====================================================================
 # visitor_controller.py
-# Controller de Visitantes — SISPORT V1.1
-# Gerencia wizard (3 etapas), busca por CPF, foto, check-in/check-out.
+# Controller de Visitantes — SISPORT V2
+# Gerencia wizard (3 etapas), busca por CPF, foto (BLOB no banco),
+# check-in/check-out.
 # =====================================================================
 
 # ─────────────────────────────────────────────────────────────────────
 # Imports
 # ─────────────────────────────────────────────────────────────────────
+import uuid
 from datetime import datetime
+
 from flask import session
-from ..extensions import db
-from ..models.visitor import Visitor, Visit
-from ..services.photo_service import save_or_replace_profile_photo
-from ..utils.validators import normalize_cpf, is_valid_cpf, validate_required_email
 from sqlalchemy import or_
+
+from ..extensions import db
+from ..models.visitor import Visitor, Visit, TempPhoto
+from ..utils.photo import parse_photo_data_url
+from ..utils.validators import normalize_cpf, is_valid_cpf, validate_required_email
 
 
 # ── Categorias válidas ───────────────────────────────────────────────
@@ -42,7 +46,6 @@ def find_visitor_by_cpf(cpf: str):
 def wizard_start_for_new_visitor(cpf: str = ""):
     """
     Inicializa a sessão do wizard para um novo cadastro de visitante.
-    Define os campos padrão e posiciona na etapa 1.
 
     :param cpf: (str) CPF pré-preenchido (opcional).
     :return: None — os dados são gravados em session["wizard"].
@@ -57,8 +60,9 @@ def wizard_start_for_new_visitor(cpf: str = ""):
         "empresa": "",
         "father_name": "",
         "mom_name": "",
-        "category": "civil",          # ← NOVO
-        "photo_rel_path": "",
+        "category": "civil",
+        "temp_photo_id": None,      # ← ID da foto na tabela temp_photos
+        "photo_captured": False,     # ← indica se capturou foto
     }
 
 
@@ -69,15 +73,6 @@ def _check_duplicate_fields(name: str, father_name: str, mom_name: str,
     Verifica se algum dos campos informados já pertence a um visitante
     cadastrado no banco de dados. Se encontrar duplicidade, levanta
     ValueError com a lista detalhada de conflitos.
-
-    :param name:        (str) Nome completo.
-    :param father_name: (str) Nome do pai.
-    :param mom_name:    (str) Nome da mãe.
-    :param cpf:         (str) CPF normalizado.
-    :param phone:       (str) Telefone.
-    :param email:       (str | None) E-mail (pode ser None).
-    :param exclude_id:  (int | None) ID do visitante a ignorar (para edição).
-    :raises ValueError: Se qualquer campo já estiver em uso por outro visitante.
     """
     filters = [
         Visitor.cpf == cpf,
@@ -103,10 +98,8 @@ def _check_duplicate_fields(name: str, father_name: str, mom_name: str,
         return
 
     conflicts = []
-
     for visitor in matches:
         visitor_label = f"{visitor.name} (CPF: {visitor.cpf})"
-
         if visitor.cpf == cpf:
             conflicts.append(f"• CPF já cadastrado por: {visitor_label}")
         if visitor.name == name:
@@ -132,22 +125,9 @@ def wizard_step1_submit(name: str, father_name: str, mom_name: str,
                         category: str = "civil"):
     """
     Processa e valida os dados da Etapa 1 do wizard (dados pessoais).
-    Normaliza campos, valida CPF, verifica duplicidade e avança para etapa 2.
-
-    :param name:        (str) Nome completo do visitante.
-    :param father_name: (str) Nome do pai (opcional).
-    :param mom_name:    (str) Nome da mãe (obrigatório).
-    :param cpf:         (str) CPF do visitante.
-    :param phone:       (str) Telefone/celular (obrigatório).
-    :param email:       (str) E-mail (opcional).
-    :param empresa:     (str) Empresa do visitante (opcional).
-    :param category:    (str) Categoria: civil, militar ou ex-militar.
-    :return: None — atualiza session["wizard"] e avança step para 2.
-    :raises ValueError: Se dados forem inválidos ou já existirem no banco.
     """
     w = session.get("wizard") or {}
 
-    # ── Normalização ──────────────────────────────────────────────
     name = (name or "").strip().upper()
     father_name = (father_name or "").strip().upper()
     mom_name = (mom_name or "").strip().upper()
@@ -172,44 +152,26 @@ def wizard_step1_submit(name: str, father_name: str, mom_name: str,
         raise ValueError("Nome completo é obrigatório.")
     if not mom_name:
         raise ValueError("Nome da mãe é obrigatório.")
-
-    # ── Validar categoria ─────────────────────────────────────────
     if category not in VALID_CATEGORIES:
         raise ValueError(f"Categoria inválida: '{category}'. Use: {', '.join(VALID_CATEGORIES)}.")
 
-    # ── Verificação de duplicidade no banco ───────────────────────
     _check_duplicate_fields(
-        name=name,
-        father_name=father_name,
-        mom_name=mom_name,
-        cpf=cpf,
-        phone=phone,
-        email=email,
+        name=name, father_name=father_name, mom_name=mom_name,
+        cpf=cpf, phone=phone, email=email,
     )
 
-    # ── Atualiza sessão e avança para etapa 2 ────────────────────
     w.update({
-        "name": name,
-        "father_name": father_name,
-        "mom_name": mom_name,
-        "cpf": cpf,
-        "phone": phone,
-        "email": email,
-        "empresa": empresa,
-        "category": category,          # ← NOVO
-        "step": 2,
+        "name": name, "father_name": father_name, "mom_name": mom_name,
+        "cpf": cpf, "phone": phone, "email": email,
+        "empresa": empresa, "category": category, "step": 2,
     })
     session["wizard"] = w
 
 
 def wizard_step2_submit(photo_data_url: str | None):
     """
-    Processa a Etapa 2 do wizard: salva a foto de perfil (opcional)
-    e avança para a etapa 3.
-
-    :param photo_data_url: (str | None) Foto em formato data URL (base64).
-    :return: None — atualiza session["wizard"] com photo_rel_path e avança step para 3.
-    :raises ValueError: Se o CPF não estiver presente na sessão do wizard.
+    Processa a Etapa 2 do wizard: recebe a foto (data URL), decodifica
+    e salva na tabela temporária. Se pulou, limpa referência anterior.
     """
     w = session.get("wizard") or {}
     cpf = (w.get("cpf") or "").strip()
@@ -217,75 +179,113 @@ def wizard_step2_submit(photo_data_url: str | None):
         raise ValueError("CPF não informado. Volte à etapa 1.")
 
     photo_data_url = (photo_data_url or "").strip()
-    photo_rel_path = None
-    if photo_data_url:
-        photo_rel_path = save_or_replace_profile_photo(photo_data_url, cpf)
 
-    w.update({"photo_rel_path": photo_rel_path, "step": 3})
+    if photo_data_url:
+        # ── Decodifica a foto e salva no banco temporário ─────────
+        photo_bytes, photo_mime = parse_photo_data_url(photo_data_url)
+
+        temp_id = w.get("temp_photo_id") or str(uuid.uuid4())
+
+        existing_temp = db.session.get(TempPhoto, temp_id)
+        if existing_temp:
+            existing_temp.photo_data     = photo_bytes
+            existing_temp.photo_mimetype = photo_mime
+        else:
+            db.session.add(TempPhoto(
+                id=temp_id,
+                photo_data=photo_bytes,
+                photo_mimetype=photo_mime,
+            ))
+        db.session.commit()
+
+        w["temp_photo_id"]  = temp_id
+        w["photo_captured"] = True
+    else:
+        # ── Foto pulada — limpa referência anterior se existir ────
+        old_id = w.get("temp_photo_id")
+        if old_id:
+            old_temp = db.session.get(TempPhoto, old_id)
+            if old_temp:
+                db.session.delete(old_temp)
+                db.session.commit()
+
+        w["temp_photo_id"]  = None
+        w["photo_captured"] = False
+
+    w["step"] = 3
     session["wizard"] = w
+
 
 
 def create_visitor_if_not_exists_from_wizard() -> Visitor:
     """
     Finaliza o wizard: cria o visitante no banco de dados a partir dos
-    dados armazenados na sessão. Se já existir um visitante com o mesmo
-    CPF, retorna o registro existente sem duplicar.
-
-    :return: (Visitor) Instância do visitante criado ou já existente.
-    :raises ValueError: Se dados obrigatórios estiverem ausentes na sessão.
+    dados da sessão. A foto é recuperada da tabela temp_photos e salva
+    como BLOB no registro definitivo do visitante.
     """
     w = session.get("wizard") or {}
-    name = (w.get("name") or "").strip()
+    name        = (w.get("name") or "").strip()
     father_name = (w.get("father_name") or "").strip()
-    mom_name = (w.get("mom_name") or "").strip()
-    cpf = (w.get("cpf") or "").strip()
-    phone = (w.get("phone") or "").strip()
-    email = w.get("email") or None
-    empresa = (w.get("empresa") or "").strip()
-    category = (w.get("category") or "civil").strip()    # ← NOVO
-    photo_rel_path = w.get("photo_rel_path") or None
+    mom_name    = (w.get("mom_name") or "").strip()
+    cpf         = (w.get("cpf") or "").strip()
+    phone       = (w.get("phone") or "").strip()
+    email       = w.get("email") or None
+    empresa     = (w.get("empresa") or "").strip()
+    category    = (w.get("category") or "civil").strip()
 
     if not name or not cpf or not phone or not mom_name:
         raise ValueError("Cadastro incompleto (nome, cpf, telefone e nome da mãe).")
 
     existing = find_visitor_by_cpf(cpf)
     if existing:
+        # ── Limpa foto temporária se existir ──────────────────────
+        _cleanup_temp_photo(w.get("temp_photo_id"))
         return existing
 
+    # ── Recupera foto da tabela temporária ────────────────────────
+    photo_bytes = None
+    photo_mime  = None
+    temp_id = w.get("temp_photo_id")
+    if temp_id:
+        temp = db.session.get(TempPhoto, temp_id)
+        if temp:
+            photo_bytes = temp.photo_data
+            photo_mime  = temp.photo_mimetype
+            db.session.delete(temp)  # Limpa o registro temporário
+
     visitor = Visitor(
-        name=name,
-        cpf=cpf,
-        phone=phone,
-        photo_rel_path=photo_rel_path,
-        email=email,
-        empresa=empresa,
-        father_name=father_name,
-        mom_name=mom_name,
-        category=category,                                # ← NOVO
+        name=name, cpf=cpf, phone=phone, email=email,
+        empresa=empresa, father_name=father_name, mom_name=mom_name,
+        category=category, photo_data=photo_bytes, photo_mimetype=photo_mime,
     )
     db.session.add(visitor)
     db.session.commit()
     return visitor
 
 
+def _cleanup_temp_photo(temp_id: str | None):
+    """Remove foto temporária do banco, se existir."""
+    if not temp_id:
+        return
+    temp = db.session.get(TempPhoto, temp_id)
+    if temp:
+        db.session.delete(temp)
+        db.session.commit()
+
+
 # =====================================================================
 # Funções — Foto de Visitante
 # =====================================================================
 
-def visitor_photo_update(visitor: Visitor, photo_data_url: str):
+def visitor_photo_update(visitor, photo_data_url):
     """
     Atualiza a foto de perfil de um visitante já cadastrado.
-
-    :param visitor:        (Visitor) Instância do visitante a ser atualizado.
-    :param photo_data_url: (str) Foto em formato data URL (base64).
-    :return: None — atualiza visitor.photo_rel_path e persiste no banco.
-    :raises ValueError: Se o visitante não possuir CPF vinculado.
     """
-    if not visitor.cpf:
-        raise ValueError("Visitante sem CPF não pode ter foto vinculada.")
-    photo_rel_path = save_or_replace_profile_photo(photo_data_url, visitor.cpf)
-    visitor.photo_rel_path = photo_rel_path
-    db.session.commit()
+    photo_bytes, photo_mime = parse_photo_data_url(photo_data_url)
+    visitor.photo_data     = photo_bytes
+    visitor.photo_mimetype = photo_mime
+    db.session.commit()  # ← direto no banco, zero sessão
+
 
 
 # =====================================================================
@@ -294,12 +294,7 @@ def visitor_photo_update(visitor: Visitor, photo_data_url: str):
 
 def register_checkin(visitor: Visitor, destination: str) -> int:
     """
-    Registra uma nova entrada (check-in) para um visitante já cadastrado.
-
-    :param visitor:     (Visitor) Instância do visitante.
-    :param destination: (str) Local/destino da visita (obrigatório).
-    :return: (int) ID da visita recém-criada.
-    :raises ValueError: Se o destino não for informado.
+    Registra uma nova entrada (check-in) para um visitante.
     """
     destination = (destination or "").strip()
     if not destination:
@@ -314,10 +309,6 @@ def register_checkin(visitor: Visitor, destination: str) -> int:
 def checkout_visit(visit_id: int):
     """
     Registra a saída (check-out) de uma visita em aberto.
-
-    :param visit_id: (int) ID da visita a ser encerrada.
-    :return: (Visit) Instância da visita atualizada.
-    :raises ValueError: Se a visita não for encontrada no banco.
     """
     visit = db.session.get(Visit, visit_id)
     if not visit:

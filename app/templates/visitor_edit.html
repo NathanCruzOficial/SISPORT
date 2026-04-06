@@ -34,25 +34,26 @@
         <div class="sheet p-3 text-center">
 
           {# ── Foto atual (esconde quando câmera abre) ───────────── #}
-          <div id="current-photo-wrapper">
-            <div class="photo-box mb-3 mx-auto" style="width:160px;height:160px;">
-              {% if visitor.photo_rel_path %}
-                <img src="{{ url_for('visitor.uploaded_file', filename=visitor.photo_rel_path) }}?v={{ visitor.id }}"
-                     alt="Foto do visitante"
-                     class="w-100 h-100"
-                     style="object-fit: cover;">
-              {% else %}
-                <img src="{{ url_for('static', filename='img/avatar-placeholder.jpg') }}"
-                     alt="Sem foto"
-                     class="w-100 h-100 opacity-50"
-                     style="object-fit: cover;">
-              {% endif %}
+            <div id="current-photo-wrapper">
+              <div class="photo-box mb-3 mx-auto" style="width:160px;height:160px;">
+                {% if visitor.photo_data %}
+                  <img src="{{ photo_url('visitor', visitor.id) }}"
+                      alt="Foto do visitante"
+                      class="w-100 h-100"
+                      style="object-fit: cover;">
+                {% else %}
+                  <img src="{{ url_for('static', filename='img/avatar-placeholder.jpg') }}"
+                      alt="Sem foto"
+                      class="w-100 h-100 opacity-50"
+                      style="object-fit: cover;">
+                {% endif %}
+              </div>
+
+              <button type="button" id="btn-open-camera" class="btn btn-outline-success w-100">
+                <i class="bi bi-camera me-1"></i>Trocar foto
+              </button>
             </div>
 
-            <button type="button" id="btn-open-camera" class="btn btn-outline-success w-100">
-              <i class="bi bi-camera me-1"></i>Trocar foto
-            </button>
-          </div>
 
           {# ── Câmera (hidden por padrão) ────────────────────────── #}
           <div id="camera-wrapper" style="display: none;" data-camera="1">

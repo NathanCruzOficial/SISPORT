@@ -319,14 +319,18 @@
             {# Foto 1:1 #}
               <div class="text-center flex-shrink-0">
                 <div class="photo-box mx-auto" style="width:150px;height:150px;border-radius:8px;">
-                  {% if wizard.photo_rel_path %}
-                    <img src="{{ url_for('visitor.uploaded_file', filename=wizard.photo_rel_path) }}"
-                        alt="Foto" class="w-100 h-100" style="object-fit:cover;">
-                  {% else %}
-                    <img src="{{ url_for('static', filename='img/avatar-placeholder.jpg') }}"
-                        alt="Sem foto" class="w-100 h-100 opacity-50" style="object-fit:cover;">
-                  {% endif %}
-                </div>
+                      {% if wizard.temp_photo_id %}
+                        <img src="{{ photo_url('temp', wizard.temp_photo_id) }}"
+                            alt="Foto capturada" class="rounded-3"
+                            style="width:160px; height:160px; object-fit:cover;">
+                      {% else %}
+                        <img src="{{ url_for('static', filename='img/avatar-placeholder.jpg') }}"
+                            alt="Sem foto" class="rounded-3 opacity-50"
+                            style="width:160px; height:160px; object-fit:cover;">
+                      {% endif %}
+                  </div>
+
+
               <div class="mt-2">
                 {% set cat = wizard.category|default('civil') %}
                 {% if cat == 'militar' %}
