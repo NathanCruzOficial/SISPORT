@@ -48,9 +48,20 @@ jobs:
 
       - name: Verify installer was created
         run: |
-           if (-not (Test-Path "installer\installer_output\*.exe")) { Write-Error "Installer not found!"; exit 1 }
+          if (-not (Test-Path "installer\installer_output\*.exe")) { Write-Error "Installer not found!"; exit 1 }
+
+      - name: Generate SHA-256 hash
+        shell: pwsh
+        run: |
+          $exe = Get-Item "installer\installer_output\*.exe"
+          $hash = (Get-FileHash -Path $exe.FullName -Algorithm SHA256).Hash
+          $hashFile = "installer\installer_output\$($exe.BaseName).sha256"
+          "$hash  $($exe.Name)" | Out-File -Encoding ascii $hashFile
+          Write-Host "SHA-256: $hash"
 
       - name: Upload installer
         uses: softprops/action-gh-release@v2
         with:
-          files: installer/installer_output/*.exe
+          files: |
+            installer/installer_output/*.exe
+            installer/installer_output/*.sha256
