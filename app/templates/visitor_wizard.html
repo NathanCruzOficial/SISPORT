@@ -214,8 +214,8 @@
           <div class="mx-auto text-center" style="max-width: 420px;" data-camera="1">
 
             <div id="camera-container"
-                 class="position-relative rounded-4 overflow-hidden bg-dark mx-auto border border-2 border-secondary"
-                 style="aspect-ratio: 4/3;">
+              class="position-relative rounded-4 overflow-hidden bg-dark mx-auto border border-2 border-secondary"
+              style="aspect-ratio: 1; max-width: 380px;">
 
               <video id="cam-video" playsinline muted
                      class="w-100 h-100" style="object-fit: cover; display: block;"></video>
@@ -316,17 +316,17 @@
           {# ── Linha principal: Foto + Dados ─────────────────────── #}
           <div class="d-flex flex-column flex-sm-row gap-3 align-items-center align-items-sm-start">
 
-            {# Foto estilo 3×4 #}
-            <div class="text-center flex-shrink-0">
-              <div class="photo-box mx-auto" style="width:140px;height:170px;border-radius:8px;">
-                {% if wizard.photo_rel_path %}
-                  <img src="{{ url_for('visitor.uploaded_file', filename=wizard.photo_rel_path) }}"
-                       alt="Foto" class="w-100 h-100" style="object-fit:cover;">
-                {% else %}
-                  <img src="{{ url_for('static', filename='img/avatar-placeholder.jpg') }}"
-                       alt="Sem foto" class="w-100 h-100 opacity-50" style="object-fit:cover;">
-                {% endif %}
-              </div>
+            {# Foto 1:1 #}
+              <div class="text-center flex-shrink-0">
+                <div class="photo-box mx-auto" style="width:150px;height:150px;border-radius:8px;">
+                  {% if wizard.photo_rel_path %}
+                    <img src="{{ url_for('visitor.uploaded_file', filename=wizard.photo_rel_path) }}"
+                        alt="Foto" class="w-100 h-100" style="object-fit:cover;">
+                  {% else %}
+                    <img src="{{ url_for('static', filename='img/avatar-placeholder.jpg') }}"
+                        alt="Sem foto" class="w-100 h-100 opacity-50" style="object-fit:cover;">
+                  {% endif %}
+                </div>
               <div class="mt-2">
                 {% set cat = wizard.category|default('civil') %}
                 {% if cat == 'militar' %}
@@ -431,5 +431,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="/static/js/face-cropper.js"></script>
 <script src="/static/js/camera.js"></script>
 {% endblock %}
+

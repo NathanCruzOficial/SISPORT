@@ -63,8 +63,8 @@
               <input type="hidden" name="photo_data_url" id="photo_data_url">
 
               <div id="camera-container"
-                   class="position-relative rounded-3 overflow-hidden bg-dark mx-auto border border-2 border-secondary mb-3"
-                   style="width: 220px; height: 220px;">
+                class="position-relative rounded-3 overflow-hidden bg-dark mx-auto border border-2 border-secondary mb-3"
+                style="width: 220px; aspect-ratio: 1;">
 
                 <video id="cam-video" playsinline muted
                        class="w-100 h-100" style="object-fit: cover; display: block;"></video>
@@ -250,6 +250,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="/static/js/face-cropper.js"></script>
 <script src="/static/js/camera.js"></script>
 <script>
 (function() {
@@ -272,6 +273,8 @@
   btnCancel.addEventListener('click', function() {
     camWrapper.style.display   = 'none';
     photoWrapper.style.display = 'block';
+    // Para o face cropper e câmera ao cancelar
+    if (window.FaceCropper) window.FaceCropper.stop();
   });
 
   if (btnCapture) {
@@ -292,3 +295,4 @@
 })();
 </script>
 {% endblock %}
+

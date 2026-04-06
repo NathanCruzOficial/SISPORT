@@ -2,6 +2,7 @@
 // camera.js — SISPORT V2
 // Câmera abre automaticamente. Preview no mesmo elemento.
 // Borda verde ao capturar. Fluxo simplificado.
+// Face Cropper integrado como camada OPCIONAL (não altera nada se ausente).
 // =====================================================================
 
 (function () {
@@ -107,7 +108,6 @@
     const block = document.querySelector('[data-camera="1"]');
     if (!block) return;
 
-    // Se o bloco está escondido (editor), não faz nada agora
     if (block.offsetParent === null) {
       log("Bloco de câmera oculto — aguardando sisport:open-camera.");
       return;
@@ -135,11 +135,67 @@
 
     let stream = null;
 
+    // ── Face Cropper: montar elementos dinâmicos se disponível ──────
+    // Cria um canvas extra POR CIMA do vídeo para o preview do crop.
+    // Se FaceCropper não existir, nada é criado e tudo funciona normal.
+
+    let fcActive = false;
+    let fcCanvas = null;
+    let fcIndicator = null;
+
+    const hasFaceCropper = typeof window.FaceCropper !== "undefined";
+
+    if (hasFaceCropper) {
+      log("FaceCropper disponível — montando overlay.");
+
+      // Canvas do crop: absoluto, cobre o vídeo inteiro
+      fcCanvas = document.createElement("canvas");
+      fcCanvas.style.cssText =
+        "position:absolute; top:0; left:0; width:100%; height:100%; " +
+        "object-fit:cover; display:none; z-index:1; pointer-events:none;";
+      container.appendChild(fcCanvas);
+
+      // Indicador de status do rosto
+      fcIndicator = document.createElement("div");
+      fcIndicator.style.cssText =
+        "display:none; position:absolute; bottom:8px; left:50%; " +
+        "transform:translateX(-50%); z-index:3; padding:4px 14px; " +
+        "border-radius:20px; font-size:0.75rem; font-weight:600; " +
+        "color:#fff; backdrop-filter:blur(6px); pointer-events:none; " +
+        "white-space:nowrap; transition:background-color 0.3s;";
+      container.appendChild(fcIndicator);
+    }
+
+    function onFaceStatus(status) {
+      if (!fcIndicator) return;
+      fcIndicator.style.display = "block";
+      switch (status) {
+        case "found":
+          fcIndicator.textContent = "✅ Rosto detectado";
+          fcIndicator.style.backgroundColor = "rgba(25,135,84,0.85)";
+          break;
+        case "lost":
+          fcIndicator.textContent = "⚠️ Reposicione o rosto";
+          fcIndicator.style.backgroundColor = "rgba(255,28,7,0.85)";
+          break;
+        case "searching":
+          fcIndicator.textContent = "🔍 Procurando rosto…";
+          fcIndicator.style.backgroundColor = "rgba(108,117,125,0.85)";
+          break;
+      }
+    }
+
     // ── Estados visuais ─────────────────────────────────────────────
 
     function setStateLive() {
       video.style.display = "block";
       canvas.style.display = "none";
+
+      if (fcActive && fcCanvas) {
+        // Face cropper ativo: mostra canvas do crop POR CIMA do vídeo
+        fcCanvas.style.display = "block";
+      }
+
       container.classList.remove("border-secondary");
       container.classList.add("border-success");
       container.style.borderWidth = "";
@@ -153,6 +209,11 @@
     function setStateCaptured(dataUrl) {
       video.style.display = "none";
       canvas.style.display = "block";
+
+      // Esconde o overlay do face cropper
+      if (fcCanvas) fcCanvas.style.display = "none";
+      if (fcIndicator) fcIndicator.style.display = "none";
+
       container.classList.remove("border-secondary");
       container.classList.add("border-success");
       container.style.borderWidth = "3px";
@@ -178,13 +239,24 @@
     // ── Abrir câmera ────────────────────────────────────────────────
 
     async function startCamera() {
-      // Mostra loading, esconde erro
       showFlex(loading);
       hide(errorOverlay);
 
       try {
         stream = await openCamera(video);
         log("Câmera aberta com sucesso.");
+
+        // Tenta ativar face cropper (opcional, não bloqueia)
+        if (hasFaceCropper && fcCanvas) {
+          try {
+            fcActive = await window.FaceCropper.start(video, fcCanvas, onFaceStatus);
+            log(fcActive ? "FaceCropper ativo ✔" : "FaceCropper não iniciou — modo normal.");
+          } catch (fcErr) {
+            log("FaceCropper erro:", fcErr.message, "— modo normal.");
+            fcActive = false;
+          }
+        }
+
         setStateReady();
       } catch (err) {
         console.error("[camera] Falha ao abrir:", err?.name, err?.message, err);
@@ -199,9 +271,31 @@
 
     btnCapture?.addEventListener("click", () => {
       if (!stream || !video) return;
-      const dataUrl = captureToCanvas(video, canvas);
+
+      let dataUrl = null;
+
+      // Se face cropper está ativo, usa o crop recortado
+      if (fcActive && window.FaceCropper) {
+        dataUrl = window.FaceCropper.capture();
+        if (dataUrl) {
+          log("Foto via FaceCropper (crop 3:4).");
+          // Desenha no canvas de exibição para o preview
+          const img = new Image();
+          img.onload = () => {
+            canvas.width = img.width;
+            canvas.height = img.height;
+            canvas.getContext("2d").drawImage(img, 0, 0);
+            setStateCaptured(dataUrl);
+          };
+          img.src = dataUrl;
+          return; // sai aqui — o setStateCaptured roda no onload
+        }
+      }
+
+      // Fallback: frame inteiro (comportamento original)
+      dataUrl = captureToCanvas(video, canvas);
       setStateCaptured(dataUrl);
-      log("Foto capturada.");
+      log("Foto capturada (frame inteiro).");
     });
 
     // ── Botão TIRAR OUTRA ───────────────────────────────────────────
@@ -222,7 +316,10 @@
 
     // ── Cleanup ─────────────────────────────────────────────────────
 
-    window.addEventListener("beforeunload", () => stopCamera(stream));
+    window.addEventListener("beforeunload", () => {
+      if (window.FaceCropper) window.FaceCropper.stop();
+      stopCamera(stream);
+    });
   }
 
   // ── Abertura sob demanda (tela de edição) ───────────────────────
@@ -231,7 +328,6 @@
     const video = document.getElementById("cam-video");
     if (!video) return;
 
-    // Se já tem stream rodando, não reabre
     if (video.srcObject) {
       log("Câmera já ativa, ignorando.");
       const loading = document.getElementById("cam-loading");
