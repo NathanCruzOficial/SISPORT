@@ -49,42 +49,81 @@
   let _ctx         = null;
   let _onStatus    = null;
 
-  // -----------------------------------------------------------------
-  // Inicialização do detector
-  // -----------------------------------------------------------------
-  async function initDetector() {
-    if ("FaceDetector" in window) {
-      try {
-        detector = new window.FaceDetector({ maxDetectedFaces: 5, fastMode: true });
-        detectorType = "native";
-        log("FaceDetector nativo ✔");
-        return true;
-      } catch (e) { warn("Nativo falhou:", e.message); }
-    }
 
-    log("Carregando face-api.js...");
+  // -----------------------------------------------------------------
+// Inicialização do detector — USA MODELO PRÉ-CARREGADO
+// -----------------------------------------------------------------
+async function initDetector() {
+
+  // Caminho rápido: preloader já carregou tudo
+  if (window._facePreloaderReady) {
+    log("Modelo pré-carregado ✔ (instantâneo)");
+    return _initFromPreloaded();
+  }
+
+  // Espera o preloader terminar (máx 20s)
+  log("Aguardando preloader…");
+  const ready = await new Promise((resolve) => {
+    if (window._facePreloaderReady) return resolve(true);
+
+    const timeout = setTimeout(() => resolve(false), 20000);
+    window.addEventListener("facepreloader:ready", () => {
+      clearTimeout(timeout);
+      resolve(true);
+    }, { once: true });
+  });
+
+  if (ready) {
+    log("Preloader concluiu ✔");
+    return _initFromPreloaded();
+  }
+
+  // Fallback: carrega direto (caso raro)
+  warn("Preloader timeout — carregando direto…");
+  return _initDirectly();
+}
+
+function _initFromPreloaded() {
+  if ("FaceDetector" in window) {
     try {
-      await loadScript(C.faceApiCdn);
-      await faceapi.nets.tinyFaceDetector.loadFromUri(C.faceApiModels);
-      detectorType = "faceapi";
-      log("face-api.js ✔");
+      detector = new window.FaceDetector({ maxDetectedFaces: 5, fastMode: true });
+      detectorType = "native";
+      log("FaceDetector nativo ✔");
       return true;
-    } catch (e) {
-      warn("face-api.js falhou:", e.message);
-      detectorType = "none";
-      return false;
-    }
+    } catch (e) { warn("Nativo falhou:", e.message); }
   }
 
-  function loadScript(src) {
-    return new Promise((res, rej) => {
-      if (document.querySelector(`script[src="${src}"]`)) return res();
-      const s = document.createElement("script");
-      s.src = src; s.onload = res;
-      s.onerror = () => rej(new Error("Load fail: " + src));
-      document.head.appendChild(s);
-    });
+  if (typeof faceapi !== "undefined" &&
+      faceapi.nets.tinyFaceDetector.isLoaded) {
+    detectorType = "faceapi";
+    log("face-api.js (pré-carregado) ✔");
+    return true;
   }
+
+  warn("Nenhum detector após preload.");
+  return false;
+}
+
+async function _initDirectly() {
+  if ("FaceDetector" in window) {
+    try {
+      detector = new window.FaceDetector({ maxDetectedFaces: 5, fastMode: true });
+      detectorType = "native";
+      return true;
+    } catch (_) {}
+  }
+
+  try {
+    await loadScript(C.faceApiCdn);
+    await faceapi.nets.tinyFaceDetector.loadFromUri(C.faceApiModels);
+    detectorType = "faceapi";
+    return true;
+  } catch (e) {
+    warn("Fallback falhou:", e.message);
+    detectorType = "none";
+    return false;
+  }
+}
 
   // -----------------------------------------------------------------
   // Detecção de rostos — detecta TODOS e retorna o MAIOR

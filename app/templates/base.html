@@ -321,6 +321,9 @@
 <script src="{{ url_for('static', filename='js/mask.js') }}"></script>
 <script src="{{ url_for('static', filename='js/confirm_modal.js') }}"></script>
 
+{# Pré-carregamento do modelo de detecção facial (global) #}
+<script src="{{ url_for('static', filename='js/face-preloader.js') }}"></script>
+
 {% block scripts %}{% endblock %}
 </body>
 </html>

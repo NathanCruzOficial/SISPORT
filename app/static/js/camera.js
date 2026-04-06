@@ -228,13 +228,35 @@
       hide(loading);
       showFlex(errorOverlay);
       if (btnCapture) btnCapture.disabled = true;
+
+      // ── Botão reiniciar (aparece só no erro) ──
+      let restartBtn = document.getElementById("btn-restart-camera");
+      if (!restartBtn) {
+        restartBtn = document.createElement("button");
+        restartBtn.id = "btn-restart-camera";
+        restartBtn.type = "button";
+        restartBtn.className = "btn btn-warning w-100 mt-2 py-2";
+        restartBtn.innerHTML =
+          '<i class="bi bi-arrow-clockwise me-1"></i>Tentar novamente';
+        restartBtn.addEventListener("click", () => {
+          restartBtn.style.display = "none";
+          startCamera();
+        });
+        container.parentElement.insertBefore(restartBtn, container.nextSibling);
+      }
+      restartBtn.style.display = "block";
     }
 
     function setStateReady() {
       hide(loading);
       hide(errorOverlay);
       setStateLive();
+
+      // ── Esconde botão reiniciar quando câmera funciona ──
+      const restartBtn = document.getElementById("btn-restart-camera");
+      if (restartBtn) restartBtn.style.display = "none";
     }
+
 
     // ── Abrir câmera ────────────────────────────────────────────────
 

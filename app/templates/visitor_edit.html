@@ -35,7 +35,7 @@
 
           {# ── Foto atual (esconde quando câmera abre) ───────────── #}
             <div id="current-photo-wrapper">
-              <div class="photo-box mb-3 mx-auto" style="width:160px;height:160px;">
+              <div class="photo-box mb-3 mx-auto" style="width:200px;height:200px;">
                 {% if visitor.photo_data %}
                   <img src="{{ photo_url('visitor', visitor.id) }}"
                       alt="Foto do visitante"

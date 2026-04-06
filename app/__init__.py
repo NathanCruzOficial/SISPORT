@@ -9,7 +9,7 @@
 # ─────────────────────────────────────────────────────────────────────
 # Imports
 # ─────────────────────────────────────────────────────────────────────
-from flask import Flask
+from flask import Flask, request
 from .config import Config
 from .extensions import db
 from app.paths import ensure_app_dirs
@@ -108,6 +108,16 @@ def create_app() -> Flask:
         from .models.visitor import Visit
         count = Visit.query.filter_by(check_out=None).count()
         return dict(open_count=count)
+    
+    @app.after_request
+    def cache_static_assets(response):
+        """Cache agressivo para modelos e face-api.js"""
+        path = request.path
+        if path.startswith("/static/models/") or path.endswith("face-api.min.js"):
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        return response
+
+
 
     # Cria tabelas e executa migrações
     with app.app_context():
