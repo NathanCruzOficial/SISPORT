@@ -435,6 +435,9 @@
 {% endblock %}
 
 {% block scripts %}
+{# Pré-carregamento do modelo de detecção facial (global) #}
+<script src="{{ url_for('static', filename='js/face-preloader.js') }}"></script>
+
 <script src="/static/js/face-cropper.js"></script>
 <script src="/static/js/camera.js"></script>
 {% endblock %}

@@ -76,9 +76,9 @@
   {# ── Tabela de visitas em aberto ────────────────────────────────── #}
   {% if visits|length > 0 %}
   <div class="card shadow-sm border-0">
-    <div class="table-responsive">
+    <div class="table-responsive" style="max-height: calc(100vh - 400px); overflow-y: auto;">
       <table class="table table-hover align-middle mb-0" id="visits-table">
-        <thead class="table-light">
+        <thead class="table-light" style="position: sticky; top: 0; z-index: 1;">
           <tr>
             <th style="width:36px;"></th>
             <th style="width:64px;">Foto</th>

@@ -9,7 +9,7 @@
 # ─────────────────────────────────────────────────────────────────────
 # Imports
 # ─────────────────────────────────────────────────────────────────────
-from flask import Flask, request
+from flask import Flask, request, send_from_directory
 from .config import Config
 from .extensions import db
 from app.paths import ensure_app_dirs
@@ -116,6 +116,11 @@ def create_app() -> Flask:
         if path.startswith("/static/models/") or path.endswith("face-api.min.js"):
             response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
         return response
+    
+    @app.route('/icone.ico')
+    def favicon():
+        return send_from_directory(app.root_path, 'icone.ico', mimetype='image/x-icon')
+
 
 
 

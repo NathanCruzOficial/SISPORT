@@ -321,60 +321,10 @@ def open_visits():
 
 @visitor_bp.route("/report", methods=["GET"])
 def report_page():
-    """
-    Relatório unificado com filtros de período, busca, status e categoria.
-    """
-    date_from = request.args.get("date_from", "")
-    date_to   = request.args.get("date_to", "")
-    search    = request.args.get("search", "").strip()
-    status    = request.args.get("status", "all")
-    category  = request.args.get("category", "all")
+    """Relatório unificado com filtros de período, busca, status e categoria."""
+    visits, filters, dt_from, dt_to, open_ct, closed_ct = _build_report_query()
 
     today = date.today()
-    try:
-        dt_from = datetime.strptime(date_from, "%Y-%m-%d").date() if date_from else today
-    except ValueError:
-        dt_from = today
-    try:
-        dt_to = datetime.strptime(date_to, "%Y-%m-%d").date() if date_to else today
-    except ValueError:
-        dt_to = today
-
-    if dt_from > dt_to:
-        dt_from, dt_to = dt_to, dt_from
-
-    query = (
-        db.session.query(Visit)
-        .join(Visitor, Visit.visitor_id == Visitor.id)
-        .filter(db.func.date(Visit.check_in) >= dt_from)
-        .filter(db.func.date(Visit.check_in) <= dt_to)
-    )
-
-    if status == "open":
-        query = query.filter(Visit.check_out.is_(None))
-    elif status == "closed":
-        query = query.filter(Visit.check_out.isnot(None))
-
-    if category in ("civil", "militar", "ex-militar"):
-        query = query.filter(Visitor.category == category)
-
-    if search:
-        like = f"%{search}%"
-        query = query.filter(
-            db.or_(
-                Visitor.name.ilike(like),
-                Visitor.cpf.like(like),
-                Visit.destination.ilike(like),
-                Visitor.phone.like(like),
-            )
-        )
-
-    visits = query.order_by(Visit.check_in.desc()).all()
-
-    total    = len(visits)
-    open_ct  = sum(1 for v in visits if v.check_out is None)
-    closed_ct = total - open_ct
-
     if dt_from == dt_to == today:
         title = "Relatório de Hoje"
     elif dt_from == dt_to:
@@ -382,22 +332,12 @@ def report_page():
     else:
         title = f"Relatório — {dt_from.strftime('%d/%m/%Y')} a {dt_to.strftime('%d/%m/%Y')}"
 
-    filters = {
-        "date_from":     dt_from.strftime("%Y-%m-%d"),
-        "date_to":       dt_to.strftime("%Y-%m-%d"),
-        "date_from_fmt": dt_from.strftime("%d/%m/%Y"),
-        "date_to_fmt":   dt_to.strftime("%d/%m/%Y"),
-        "search":        search,
-        "status":        status,
-        "category":      category,
-    }
-
     return render_template(
         "report_page.html",
         visits=visits,
         title=title,
         filters=filters,
-        total=total,
+        total=len(visits),
         open_count=open_ct,
         closed_count=closed_ct,
     )
@@ -405,8 +345,40 @@ def report_page():
 
 @visitor_bp.route("/report/print", methods=["GET"])
 def report_print():
+    """Versão para impressão do relatório."""
+    visits, filters, dt_from, dt_to, open_count, closed_count = _build_report_query()
+
+    return render_template(
+        "print.html",
+        visits=visits,
+        today=date.today(),
+        generated_at=datetime.now(),
+        filters=filters,
+        open_count=open_count,
+        closed_count=closed_count,
+    )
+
+@visitor_bp.route("/report/today", methods=["GET"])
+def report_today():
+    """Redireciona para o relatório filtrado por hoje."""
+    today = date.today().strftime("%Y-%m-%d")
+    return redirect(url_for("visitor.report_page", date_from=today, date_to=today))
+
+
+@visitor_bp.route("/report/today/print")
+def report_today_print():
+    """Redireciona para impressão com filtro de hoje."""
+    today = date.today().strftime("%Y-%m-%d")
+    return redirect(url_for("visitor.report_print", date_from=today, date_to=today))
+
+# ─────────────────────────────────────────────────────────────────────
+# Helper — Query de relatório com filtros (compartilhada)
+# ─────────────────────────────────────────────────────────────────────
+
+def _build_report_query():
     """
-    Versão para impressão do relatório.
+    Lê filtros da query string e retorna:
+    (visits, filters, dt_from, dt_to, open_count, closed_count)
     """
     date_from = request.args.get("date_from", "")
     date_to   = request.args.get("date_to", "")
@@ -468,29 +440,7 @@ def report_print():
         "category":      category,
     }
 
-    return render_template(
-        "print_day.html",
-        visits=visits,
-        today=today,
-        generated_at=datetime.now(),
-        filters=filters,
-        open_count=open_count,
-        closed_count=closed_count,
-    )
-
-
-@visitor_bp.route("/report/today", methods=["GET"])
-def report_today():
-    """Redireciona para o relatório filtrado por hoje."""
-    today = date.today().strftime("%Y-%m-%d")
-    return redirect(url_for("visitor.report_page", date_from=today, date_to=today))
-
-
-@visitor_bp.route("/report/today/print")
-def report_today_print():
-    """Redireciona para impressão com filtro de hoje."""
-    today = date.today().strftime("%Y-%m-%d")
-    return redirect(url_for("visitor.report_print", date_from=today, date_to=today))
+    return visits, filters, dt_from, dt_to, open_count, closed_count
 
 
 # =====================================================================

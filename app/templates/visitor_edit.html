@@ -251,6 +251,9 @@
 {% endblock %}
 
 {% block scripts %}
+{# Pré-carregamento do modelo de detecção facial (global) #}
+<script src="{{ url_for('static', filename='js/face-preloader.js') }}"></script>
+
 <script src="/static/js/face-cropper.js"></script>
 <script src="/static/js/camera.js"></script>
 <script>
@@ -272,10 +275,62 @@
   });
 
   btnCancel.addEventListener('click', function() {
+    // ── 1. Para o Face Cropper ──
+    if (window.FaceCropper) window.FaceCropper.stop();
+
+    // ── 2. Para TODAS as tracks do stream e limpa o srcObject ──
+    var video = document.getElementById('cam-video');
+    if (video && video.srcObject) {
+      video.srcObject.getTracks().forEach(function(t) { t.stop(); });
+      video.srcObject = null;
+    }
+
+    // ── 3. Reseta a visibilidade do vídeo/canvas ──
+    var canvas = document.getElementById('cam-canvas');
+    if (video)  video.style.display  = 'block';
+    if (canvas) canvas.style.display = 'none';
+
+    // ── 4. Reseta o container (borda, loading, error) ──
+    var container = document.getElementById('camera-container');
+    if (container) {
+      container.classList.remove('border-success');
+      container.classList.add('border-secondary');
+      container.style.borderWidth = '';
+    }
+
+    var loading = document.getElementById('cam-loading');
+    if (loading) {
+      loading.classList.remove('d-flex');
+      loading.classList.add('d-none');
+      loading.style.display = '';
+    }
+
+    var error = document.getElementById('cam-error');
+    if (error) {
+      error.classList.remove('d-flex');
+      error.classList.add('d-none');
+    }
+
+    // ── 5. Reseta botões da câmera ──
+    if (btnCapture) { btnCapture.style.display = 'block'; btnCapture.disabled = true; }
+    if (btnRetake)  btnRetake.style.display = 'none';
+    btnSaveWrap.style.display = 'none';
+
+    // ── 6. Limpa o input hidden da foto ──
+    var hiddenInput = document.getElementById('photo_data_url');
+    if (hiddenInput) hiddenInput.value = '';
+
+    // ── 7. Remove o botão "Tentar novamente" se existir ──
+    var restartBtn = document.getElementById('btn-restart-camera');
+    if (restartBtn) restartBtn.style.display = 'none';
+
+    // ── 8. Esconde o overlay do face cropper se existir ──
+    var fcCanvas = container ? container.querySelector('canvas:not(#cam-canvas)') : null;
+    if (fcCanvas) fcCanvas.style.display = 'none';
+
+    // ── 9. Alterna os wrappers ──
     camWrapper.style.display   = 'none';
     photoWrapper.style.display = 'block';
-    // Para o face cropper e câmera ao cancelar
-    if (window.FaceCropper) window.FaceCropper.stop();
   });
 
   if (btnCapture) {
@@ -296,4 +351,3 @@
 })();
 </script>
 {% endblock %}
-

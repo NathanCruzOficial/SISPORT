@@ -1,263 +1,289 @@
 {% extends "base.html" %}
+
+{% block styles %}
+<style>
+  /* ── Caixa de filtros fixa abaixo da navbar ──────────────────────── */
+  .filters-fixed {
+    position: fixed;
+    top: var(--navbar-h);       /* cola logo abaixo da navbar */
+    left: 0;
+    right: 0;
+    z-index: 1020;
+    background: #fff;
+    border-bottom: 2px solid rgba(0,0,0,.08);
+    box-shadow: 0 4px 12px rgba(0,0,0,.06);
+    padding: 12px 0;
+  }
+
+  /* ── Compensa a altura dos filtros fixos no conteúdo ──────────────── */
+  .table-content {
+    margin-top: var(--filters-h, 200px); /* JS calcula o valor real */
+    padding-top: 16px;
+  }
+
+  /* ── Scrollbar customizada ───────────────────────────────────────── */
+  .table-responsive::-webkit-scrollbar { width: 8px; }
+  .table-responsive::-webkit-scrollbar-track { background: #f0f0f0; border-radius: 4px; }
+  .table-responsive::-webkit-scrollbar-thumb { background: #b0b0b0; border-radius: 4px; }
+  .table-responsive::-webkit-scrollbar-thumb:hover { background: #888; }
+  .table-responsive { scrollbar-width: thin; scrollbar-color: #b0b0b0 #f0f0f0; }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container-fluid px-3 px-md-4 py-3">
-  <div class="row g-3">
 
-    {# ════════════════════════════════════════════════════════════════ #}
-    {# SIDEBAR — Filtros                                               #}
-    {# ════════════════════════════════════════════════════════════════ #}
-    <aside class="col-12 col-lg-3">
-      <div class="card shadow-sm border-0">
-        <div class="card-header bg-dark text-white d-flex align-items-center gap-2 py-2">
-          <i class="bi bi-funnel"></i>
-          <span class="fw-semibold">Filtros</span>
-        </div>
-        <div class="card-body">
-          <form method="get" action="{{ url_for('visitor.report_page') }}" id="filter-form">
+{# ════════════════════════════════════════════════════════════════════ #}
+{# CAIXA FIXA — Filtros + Cabeçalho (flutua abaixo da navbar)         #}
+{# ════════════════════════════════════════════════════════════════════ #}
+<div class="filters-fixed" id="filtersBar">
+  <div class="container-fluid px-3 px-md-4">
 
-            {# ── Período ────────────────────────────────────────── #}
-            <div class="mb-3">
-              <label class="form-label fw-semibold small mb-1">
-                <i class="bi bi-calendar-range me-1"></i>Período
-              </label>
-              <div class="d-flex gap-2">
-                <div class="flex-fill">
-                  <label class="form-label text-muted small mb-0">De</label>
-                  <input type="date" name="date_from" class="form-control form-control-sm"
-                         value="{{ filters.date_from }}">
-                </div>
-                <div class="flex-fill">
-                  <label class="form-label text-muted small mb-0">Até</label>
-                  <input type="date" name="date_to" class="form-control form-control-sm"
-                         value="{{ filters.date_to }}">
-                </div>
-              </div>
-            </div>
-
-            {# ── Atalhos de período ─────────────────────────────── #}
-            <div class="mb-3 d-flex flex-wrap gap-1">
-              <button type="button" class="btn btn-outline-secondary btn-sm flex-fill date-shortcut"
-                      data-range="today">Hoje</button>
-              <button type="button" class="btn btn-outline-secondary btn-sm flex-fill date-shortcut"
-                      data-range="yesterday">Ontem</button>
-              <button type="button" class="btn btn-outline-secondary btn-sm flex-fill date-shortcut"
-                      data-range="week">Semana</button>
-              <button type="button" class="btn btn-outline-secondary btn-sm flex-fill date-shortcut"
-                      data-range="month">Mês</button>
-            </div>
-
-            <hr class="my-2">
-
-            {# ── Busca ──────────────────────────────────────────── #}
-            <div class="mb-3">
-              <label class="form-label fw-semibold small mb-1">
-                <i class="bi bi-search me-1"></i>Busca
-              </label>
-              <input type="text" name="search" class="form-control form-control-sm"
-                     placeholder="Nome, CPF, telefone ou destino..."
-                     value="{{ filters.search }}" autocomplete="off">
-            </div>
-
-            <hr class="my-2">
-
-            {# ── Status ─────────────────────────────────────────── #}
-            <div class="mb-3">
-              <label class="form-label fw-semibold small mb-1">
-                <i class="bi bi-circle-fill me-1"></i>Status
-              </label>
-              <select name="status" class="form-select form-select-sm">
-                <option value="all"    {{ 'selected' if filters.status == 'all' }}>Todos</option>
-                <option value="open"   {{ 'selected' if filters.status == 'open' }}>Em aberto</option>
-                <option value="closed" {{ 'selected' if filters.status == 'closed' }}>Finalizados</option>
-              </select>
-            </div>
-
-            {# ── Categoria ──────────────────────────────────────── #}
-            <div class="mb-3">
-              <label class="form-label fw-semibold small mb-1">
-                <i class="bi bi-people me-1"></i>Categoria
-              </label>
-              <select name="category" class="form-select form-select-sm">
-                <option value="all"        {{ 'selected' if filters.category == 'all' }}>Todas</option>
-                <option value="civil"      {{ 'selected' if filters.category == 'civil' }}>Civil</option>
-                <option value="militar"    {{ 'selected' if filters.category == 'militar' }}>Militar</option>
-                <option value="ex-militar" {{ 'selected' if filters.category == 'ex-militar' }}>Ex-Militar</option>
-              </select>
-            </div>
-
-            <hr class="my-2">
-
-            {# ── Ações ──────────────────────────────────────────── #}
-            <div class="d-grid gap-2">
-              <button type="submit" class="btn btn-primary btn-sm">
-                <i class="bi bi-funnel me-1"></i>Aplicar filtros
-              </button>
-              <a href="{{ url_for('visitor.report_page') }}" class="btn btn-outline-secondary btn-sm">
-                <i class="bi bi-x-circle me-1"></i>Limpar filtros
-              </a>
-            </div>
-
-          </form>
-        </div>
-      </div>
-    </aside>
-
-    {# ════════════════════════════════════════════════════════════════ #}
-    {# CONTEÚDO PRINCIPAL — Tabela de visitas                          #}
-    {# ════════════════════════════════════════════════════════════════ #}
-    <div class="col-12 col-lg-9">
-
-      {# ── Cabeçalho ────────────────────────────────────────────── #}
-      <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-3">
-        <div>
-          <h1 class="h4 mb-1">{{ title }}</h1>
-          <div class="d-flex gap-2 flex-wrap">
-            <span class="badge text-bg-primary">{{ total }} registro{{ 's' if total != 1 }}</span>
-            <span class="badge text-bg-success">{{ open_count }} em aberto</span>
-            <span class="badge text-bg-secondary">{{ closed_count }} finalizado{{ 's' if closed_count != 1 }}</span>
-          </div>
-        </div>
+    {# ── Linha 1: Título + Badges + Botões ──────────────────────── #}
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-2">
+      <div>
+        <h1 class="h5 mb-1"><i class="bi bi-clipboard-data me-2"></i>{{ title }}</h1>
         <div class="d-flex gap-2 flex-wrap">
-          <a class="btn btn-primary btn-sm"
-            href="{{ url_for('visitor.report_print', **filters) }}">
-            <i class="bi bi-printer me-1"></i>Imprimir
-          </a>
-          <a class="btn btn-outline-success btn-sm" href="{{ url_for('visitor.open_visits') }}">
-            <i class="bi bi-door-open me-1"></i>Em Aberto
-          </a>
-          <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('visitor.identify') }}">
-            <i class="bi bi-arrow-left me-1"></i>Início
-          </a>
+          <span class="badge text-bg-primary">{{ total }} registro{{ 's' if total != 1 }}</span>
+          <span class="badge text-bg-success">{{ open_count }} em aberto</span>
+          <span class="badge text-bg-secondary">{{ closed_count }} finalizado{{ 's' if closed_count != 1 }}</span>
         </div>
       </div>
-
-      {# ── Filtros ativos (pills) ───────────────────────────────── #}
-      {% set has_active = filters.search or filters.status != 'all' or filters.category != 'all' %}
-      {% if has_active %}
-      <div class="d-flex flex-wrap gap-1 mb-3">
-        <small class="text-muted me-1 align-self-center">Filtros ativos:</small>
-        {% if filters.search %}
-          <span class="badge text-bg-info">
-            <i class="bi bi-search me-1"></i>"{{ filters.search }}"
-          </span>
-        {% endif %}
-        {% if filters.status == 'open' %}
-          <span class="badge text-bg-success">Em aberto</span>
-        {% elif filters.status == 'closed' %}
-          <span class="badge text-bg-secondary">Finalizados</span>
-        {% endif %}
-        {% if filters.category != 'all' %}
-          <span class="badge text-bg-warning text-dark">{{ filters.category|capitalize }}</span>
-        {% endif %}
+      <div class="d-flex gap-2 flex-wrap">
+        <button type="button" class="btn btn-primary btn-sm" id="btnPrint">
+          <i class="bi bi-printer me-1"></i>Imprimir
+        </button>
+        <a class="btn btn-outline-success btn-sm" href="{{ url_for('visitor.open_visits') }}">
+          <i class="bi bi-door-open me-1"></i>Em Aberto
+        </a>
+        <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('visitor.identify') }}">
+          <i class="bi bi-arrow-left me-1"></i>Início
+        </a>
       </div>
-      {% endif %}
-
-      {# ── Tabela ───────────────────────────────────────────────── #}
-      {% if visits|length > 0 %}
-      <div class="card shadow-sm border-0">
-        <div class="table-responsive">
-          <table class="table table-hover align-middle mb-0" id="visits-table">
-            <thead class="table-light">
-              <tr>
-                <th style="width:36px;"></th>
-                <th style="width:64px;">Foto</th>
-                <th>Visitante</th>
-                <th>Destino</th>
-                <th>Entrada</th>
-                <th>Saída</th>
-                <th style="width:120px;">Tempo</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for v in visits %}
-              <tr>
-                {# Status #}
-                <td>
-                  {% if not v.check_out %}
-                    <span class="badge text-bg-success" title="Dentro da instalação">●</span>
-                  {% else %}
-                    <span class="badge text-bg-secondary" title="Saída registrada">●</span>
-                  {% endif %}
-                </td>
-                
-                {# Foto #}
-                <td>
-                  <div class="photo-box" style="width:80px;height:80px;border-radius:12px;">
-                    {% if v.visitor.photo_data %}
-                      <img src="{{ photo_url('visitor', v.visitor.id) }}"
-                          alt="Foto" class="rounded-3"
-                          style="width:80px; height:80px; object-fit:cover;">
-                    {% else %}
-                      <img src="{{ url_for('static', filename='img/avatar-placeholder.jpg') }}"
-                          alt="Sem foto" class="rounded-3 opacity-50"
-                          style="width:80px; height:80px; object-fit:cover;">
-                    {% endif %}
-                  </div>
-                </td>
-
-                {# Dados do visitante #}
-                <td>
-                  <div class="fw-semibold">{{ v.visitor.name }}</div>
-                  <div class="text-muted small">
-                    <i class="bi bi-person-vcard"></i> {{ v.visitor.cpf }}
-                  </div>
-                  <div class="text-muted small">
-                    <i class="bi bi-telephone"></i> {{ v.visitor.phone }}
-                  </div>
-                  {% if v.visitor.category and v.visitor.category != 'civil' %}
-                  <div class="small">
-                    <span class="badge text-bg-warning text-dark">{{ v.visitor.category|capitalize }}</span>
-                  </div>
-                  {% endif %}
-                </td>
-
-                {# Destino #}
-                <td>{{ v.destination }}</td>
-
-                {# Entrada #}
-                <td class="small">{{ v.check_in.strftime("%d/%m/%Y %H:%M:%S") }}</td>
-
-                {# Saída #}
-                <td class="small">
-                  {% if v.check_out %}
-                    {{ v.check_out.strftime("%d/%m/%Y %H:%M:%S") }}
-                  {% else %}
-                    <span class="text-muted">—</span>
-                  {% endif %}
-                </td>
-
-                {# Timer #}
-                <td>
-                  <span class="font-monospace {% if not v.check_out %}text-success fw-semibold{% endif %}"
-                        data-timer="1"
-                        data-checkin="{{ v.check_in.isoformat() }}"
-                        {% if v.check_out %}data-checkout="{{ v.check_out.isoformat() }}"{% endif %}>
-                    --
-                  </span>
-                </td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {% else %}
-      <div class="card shadow-sm border-0">
-        <div class="text-center text-muted py-5">
-          <i class="bi bi-inbox fs-1 d-block mb-2 opacity-50"></i>
-          Nenhuma visita encontrada para os filtros selecionados.
-        </div>
-      </div>
-      {% endif %}
-
     </div>
+
+    <hr class="my-2">
+
+    {# ── Linha 2: Filtros inline ────────────────────────────────── #}
+    <form method="get" action="{{ url_for('visitor.report_page') }}" id="filter-form">
+      <div class="row g-2 align-items-end">
+
+        {# Período De #}
+        <div class="col-6 col-md-auto">
+          <label class="form-label small mb-0 text-muted">De</label>
+          <input type="date" name="date_from" class="form-control form-control-sm"
+                 value="{{ filters.date_from }}">
+        </div>
+
+        {# Período Até #}
+        <div class="col-6 col-md-auto">
+          <label class="form-label small mb-0 text-muted">Até</label>
+          <input type="date" name="date_to" class="form-control form-control-sm"
+                 value="{{ filters.date_to }}">
+        </div>
+
+        {# Atalhos #}
+        <div class="col-12 col-md-auto d-flex gap-1">
+          <button type="button" class="btn btn-outline-secondary btn-sm date-shortcut"
+                  data-range="today">Hoje</button>
+          <button type="button" class="btn btn-outline-secondary btn-sm date-shortcut"
+                  data-range="yesterday">Ontem</button>
+          <button type="button" class="btn btn-outline-secondary btn-sm date-shortcut"
+                  data-range="week">Semana</button>
+          <button type="button" class="btn btn-outline-secondary btn-sm date-shortcut"
+                  data-range="month">Mês</button>
+        </div>
+
+        {# Busca #}
+        <div class="col-12 col-md">
+          <label class="form-label small mb-0 text-muted">Busca</label>
+          <input type="text" name="search" class="form-control form-control-sm"
+                 placeholder="Nome, CPF, telefone ou destino..."
+                 value="{{ filters.search }}" autocomplete="off">
+        </div>
+
+        {# Status #}
+        <div class="col-6 col-md-auto">
+          <label class="form-label small mb-0 text-muted">Status</label>
+          <select name="status" class="form-select form-select-sm">
+            <option value="all"    {{ 'selected' if filters.status == 'all' }}>Todos</option>
+            <option value="open"   {{ 'selected' if filters.status == 'open' }}>Em aberto</option>
+            <option value="closed" {{ 'selected' if filters.status == 'closed' }}>Finalizados</option>
+          </select>
+        </div>
+
+        {# Categoria #}
+        <div class="col-6 col-md-auto">
+          <label class="form-label small mb-0 text-muted">Categoria</label>
+          <select name="category" class="form-select form-select-sm">
+            <option value="all"        {{ 'selected' if filters.category == 'all' }}>Todas</option>
+            <option value="civil"      {{ 'selected' if filters.category == 'civil' }}>Civil</option>
+            <option value="militar"    {{ 'selected' if filters.category == 'militar' }}>Militar</option>
+            <option value="ex-militar" {{ 'selected' if filters.category == 'ex-militar' }}>Ex-Militar</option>
+          </select>
+        </div>
+
+        {# Botões filtro #}
+        <div class="col-12 col-md-auto d-flex gap-1">
+          <button type="submit" class="btn btn-primary btn-sm">
+            <i class="bi bi-funnel me-1"></i>Filtrar
+          </button>
+          <a href="{{ url_for('visitor.report_page') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-x-circle me-1"></i>Limpar
+          </a>
+        </div>
+
+      </div>
+    </form>
+
+    {# ── Filtros ativos (pills) ─────────────────────────────────── #}
+    {% set has_active = filters.search or filters.status != 'all' or filters.category != 'all' %}
+    {% if has_active %}
+    <div class="d-flex flex-wrap gap-1 mt-2">
+      <small class="text-muted me-1 align-self-center">Ativos:</small>
+      {% if filters.search %}
+        <span class="badge text-bg-info">
+          <i class="bi bi-search me-1"></i>"{{ filters.search }}"
+        </span>
+      {% endif %}
+      {% if filters.status == 'open' %}
+        <span class="badge text-bg-success">Em aberto</span>
+      {% elif filters.status == 'closed' %}
+        <span class="badge text-bg-secondary">Finalizados</span>
+      {% endif %}
+      {% if filters.category != 'all' %}
+        <span class="badge text-bg-warning text-dark">{{ filters.category|capitalize }}</span>
+      {% endif %}
+    </div>
+    {% endif %}
+
   </div>
 </div>
+
+{# ════════════════════════════════════════════════════════════════════ #}
+{# TABELA — Rola normalmente abaixo da barra fixa                     #}
+{# ════════════════════════════════════════════════════════════════════ #}
+<div class="table-content" id="tableContent">
+  {% if visits|length > 0 %}
+  <div class="card shadow-sm border-0">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0" id="visits-table">
+        <thead class="table-light" style="position: sticky; top: 0; z-index: 2;">
+          <tr>
+            <th style="width:36px;"></th>
+            <th style="width:64px;">Foto</th>
+            <th>Visitante</th>
+            <th>Destino</th>
+            <th>Entrada</th>
+            <th>Saída</th>
+            <th style="width:120px;">Tempo</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for v in visits %}
+          <tr>
+            <td>
+              {% if not v.check_out %}
+                <span class="badge text-bg-success" title="Dentro da instalação">●</span>
+              {% else %}
+                <span class="badge text-bg-secondary" title="Saída registrada">●</span>
+              {% endif %}
+            </td>
+
+            <td>
+              <div style="width:80px;height:80px;border-radius:12px;">
+                {% if v.visitor.photo_data %}
+                  <img src="{{ photo_url('visitor', v.visitor.id) }}"
+                       alt="Foto" class="rounded-3"
+                       style="width:80px; height:80px; object-fit:cover;">
+                {% else %}
+                  <img src="{{ url_for('static', filename='img/avatar-placeholder.jpg') }}"
+                       alt="Sem foto" class="rounded-3 opacity-50"
+                       style="width:80px; height:80px; object-fit:cover;">
+                {% endif %}
+              </div>
+            </td>
+
+            <td>
+              <div class="fw-semibold">{{ v.visitor.name }}</div>
+              <div class="text-muted small">
+                <i class="bi bi-person-vcard"></i> {{ v.visitor.cpf }}
+              </div>
+              <div class="text-muted small">
+                <i class="bi bi-telephone"></i> {{ v.visitor.phone }}
+              </div>
+              {% if v.visitor.category and v.visitor.category != 'civil' %}
+              <div class="small">
+                <span class="badge text-bg-warning text-dark">{{ v.visitor.category|capitalize }}</span>
+              </div>
+              {% endif %}
+            </td>
+
+            <td>{{ v.destination }}</td>
+
+            <td class="small">{{ v.check_in.strftime("%d/%m/%Y %H:%M:%S") }}</td>
+
+            <td class="small">
+              {% if v.check_out %}
+                {{ v.check_out.strftime("%d/%m/%Y %H:%M:%S") }}
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+
+            <td>
+              <span class="font-monospace {% if not v.check_out %}text-success fw-semibold{% endif %}"
+                    data-timer="1"
+                    data-checkin="{{ v.check_in.isoformat() }}"
+                    {% if v.check_out %}data-checkout="{{ v.check_out.isoformat() }}"{% endif %}>
+                --
+              </span>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% else %}
+  <div class="card shadow-sm border-0">
+    <div class="text-center text-muted py-5">
+      <i class="bi bi-inbox fs-1 d-block mb-2 opacity-50"></i>
+      Nenhuma visita encontrada para os filtros selecionados.
+    </div>
+  </div>
+  {% endif %}
+</div>
+
 {% endblock %}
 
 {% block scripts %}
 <script>
+// ── Imprimir — monta a URL com os filtros ATUAIS do form ────────
+document.getElementById('btnPrint').addEventListener('click', function(){
+  var form   = document.getElementById('filter-form');
+  var params = new URLSearchParams(new FormData(form));
+  var url    = "{{ url_for('visitor.report_print') }}" + '?' + params.toString();
+  window.open(url, '_blank');
+});
+
+
+
+
+  // ── Calcula a altura real da barra de filtros e compensa ───────────
+  (function(){
+    function adjustOffset(){
+      const bar = document.getElementById('filtersBar');
+      const content = document.getElementById('tableContent');
+      if(bar && content){
+        const h = bar.offsetHeight;
+        content.style.marginTop = h + 'px';
+      }
+    }
+    adjustOffset();
+    window.addEventListener('resize', adjustOffset);
+  })();
+
   // ── Timer ──────────────────────────────────────────────────────────
   function pad2(n){ return String(n).padStart(2,"0"); }
   function fmtDuration(ms){
@@ -313,9 +339,10 @@
         dateFrom.value = toISO(from);
         dateTo.value   = toISO(to);
 
-        // Destaca o botão ativo
-        document.querySelectorAll(".date-shortcut").forEach(b =>
-          b.classList.remove("btn-primary","text-white"));
+        document.querySelectorAll(".date-shortcut").forEach(b => {
+          b.classList.remove("btn-primary","text-white");
+          b.classList.add("btn-outline-secondary");
+        });
         btn.classList.add("btn-primary","text-white");
         btn.classList.remove("btn-outline-secondary");
       });

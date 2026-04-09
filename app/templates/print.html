@@ -1,9 +1,3 @@
-<!-- =================================================================
-  templates/print_day.html
-  Relatório Imprimível — Registro de entrada e saída de visitantes
-  com suporte a filtros (período, busca, status, categoria).
-================================================================= -->
-
 <!doctype html>
 <html lang="pt-br">
 <head>
@@ -11,9 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Documento interno - Registro de visitantes</title>
 
-  <!-- ===========================================================
-       CSS de Impressão — Configuração @page (A4)
-       =========================================================== -->
   <style>
     @page {
       size: A4;
@@ -38,9 +29,6 @@
     }
   </style>
 
-  <!-- ===========================================================
-       CSS Principal — Estilos do documento imprimível
-       =========================================================== -->
   <style>
     :root{
       --line: #8a8a8a;
@@ -178,26 +166,24 @@
     tbody tr:nth-child(even){ background: var(--gray-1); }
     tr{ page-break-inside: avoid; page-break-after: auto; }
 
-    .status-col{ width: 18px; text-align: center; }
+    .status-col{ width: 24px; text-align: center; }
     .time-col{ width: 62px; text-align: center; }
     .dur-col{ width: 84px; text-align: center; }
     .cpf-col{ width: 120px; text-align: center; }
 
-    /* ── Status dots ───────────────────────────────────────────── */
-    .status-dot{
-      display: inline-block;
-      width: 10px; height: 10px;
-      border-radius: 50%;
-      border: 1px solid #2a2a2a;
-      background: #ce1919;
+    /* ── Status icons (texto puro — sempre imprime) ────────────── */
+    .status-icon{
+      font-weight: 900;
+      font-size: 13px;
+      line-height: 1;
     }
-    .status-empty{
-      display: inline-block;
-      width: 10px; height: 10px;
-      border-radius: 50%;
-      border: 1px solid #888;
-      background: transparent;
+    .status-open{
+      color: #ce1919;
     }
+    .status-closed{
+      color: #1a7f1a;
+    }
+
     .name-wrap{
       display: flex;
       align-items: center;
@@ -231,17 +217,28 @@
       align-items: center;
       gap: 5px;
     }
-    .summary-dot{
-      display: inline-block;
-      width: 10px; height: 10px;
-      border-radius: 50%;
-      border: 1px solid #333;
+    .summary-icon{
+      font-weight: 900;
+      font-size: 13px;
     }
-    .summary-dot.open{ background: #ce1919; }
-    .summary-dot.closed{ background: transparent; }
     .summary-count{
       font-family: "Courier New", Courier, monospace;
       font-weight: 700;
+    }
+
+    /* ── Legenda ───────────────────────────────────────────────── */
+    .doc-legend{
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+      margin: 4px 0 8px 0;
+      font-size: 10px;
+      color: #555;
+    }
+    .legend-item{
+      display: flex;
+      align-items: center;
+      gap: 4px;
     }
 
     /* ── Bloco de Conferência ──────────────────────────────────── */
@@ -298,7 +295,7 @@
     }
     .visto-label{ font-weight: 700; margin-top: 2mm; }
 
-    /* ── Indicador de preview ──────────────────────────────────── */
+    /* ── Indicador de preview (somente tela) ───────────────────── */
     .page-indicator{
       position: fixed; bottom: 10px; left: 10px;
       background: #007cba; color: white; padding: 8px;
@@ -365,7 +362,7 @@
     </div>
   </div>
 
-  <!-- ── Filtros Aplicados (visível na impressão) ──────────────── -->
+  <!-- ── Filtros Aplicados ─────────────────────────────────────── -->
   {% set has_filters = filters.search or filters.status != 'all' or filters.category != 'all' %}
   {% if has_filters %}
   <div class="doc-filters">
@@ -396,17 +393,25 @@
   </div>
   {% endif %}
 
+  <!-- ── Legenda ───────────────────────────────────────────────── -->
+  <div class="doc-legend">
+    <span class="legend-item">
+      <span class="status-icon status-closed">✓</span> = Saída registrada
+    </span>
+    <span class="legend-item">
+      <span class="status-icon status-open">✗</span> = Ainda no interior
+    </span>
+  </div>
+
   <!-- ── Resumo de contagens ───────────────────────────────────── -->
   <div class="doc-summary">
     <div class="summary-item">
       Total: <span class="summary-count">{{ visits|length }}</span>
     </div>
     <div class="summary-item">
-      <span class="summary-dot open"></span>
       Em aberto: <span class="summary-count">{{ open_count }}</span>
     </div>
     <div class="summary-item">
-      <span class="summary-dot closed"></span>
       Finalizados: <span class="summary-count">{{ closed_count }}</span>
     </div>
   </div>
@@ -415,7 +420,7 @@
   <table>
     <thead>
       <tr>
-        <th class="status-col"></th>
+        <th class="status-col center"></th>
         <th class="time-col center">Entrada</th>
         <th class="time-col center">Saída</th>
         <th class="dur-col center">Tempo</th>
@@ -431,9 +436,9 @@
       <tr>
         <td class="status-col">
           {% if not v.check_out %}
-            <span class="status-dot" title="Ainda no aquartelamento">X</span>
+            <span class="status-icon status-open" title="Ainda no aquartelamento">✗</span>
           {% else %}
-            <span class="status-empty" title="Finalizado"></span>
+            <span class="status-icon status-closed" title="Finalizado">✓</span>
           {% endif %}
         </td>
 
@@ -506,9 +511,9 @@
     📄 {{ visits|length }} visitas | Impressão: ~{{ (visits|length // 25) + 1 }} página(s)
   </div>
 
-  <!-- ── Fallback JS para generated_at ─────────────────────────── -->
-  {% if not generated_at %}
-  <script class="no-print">
+  <!-- ── Auto-print quando aberto via botão + fallback generated_at ── -->
+  <script>
+    // Fallback generated_at
     (function(){
       const el = document.getElementById("generatedAt");
       if(!el) return;
@@ -516,7 +521,18 @@
       const pad = (n) => String(n).padStart(2,'0');
       el.textContent = `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
     })();
+
+    // Auto-print: se foi aberto via window.open(), imprime automaticamente
+    (function(){
+      if(window.opener){
+        window.addEventListener('load', function(){
+          setTimeout(function(){ window.print(); }, 300);
+        });
+        window.addEventListener('afterprint', function(){
+          window.close();
+        });
+      }
+    })();
   </script>
-  {% endif %}
 </body>
 </html>

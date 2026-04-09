@@ -1,15 +1,12 @@
-{# ================================================================== #}
-{# templates/base.html                                                #}
-{# Template Base (Layout Master) — Estrutura HTML compartilhada por   #}
-{# todas as páginas do SISPORT.                                       #}
-{# ================================================================== #}
-
 <!doctype html>
 <html lang="pt-br">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ title or "SISPORT" }}</title>
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='img/icone.ico') }}">
 
   <!-- Bootstrap — LOCAL -->
   <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap/bootstrap.min.css') }}">
@@ -23,6 +20,8 @@
       --olive: #556B2F;
       --olive-dark: #3F5222;
       --bg: #f6f7f8;
+      --navbar-h: 56px;
+      --footer-h: 68px;
     }
 
     html, body { height: 100%; }
@@ -36,12 +35,15 @@
 
     main{
       flex: 1 0 auto;
-      padding-bottom: 72px;
+      margin-top: var(--navbar-h);
+      padding-bottom: calc(var(--footer-h) + 12px);
     }
 
+    /* ── Footer ────────────────────────────────────────────────── */
     footer.app-footer{
       position: fixed;
       left: 0; right: 0; bottom: 0;
+      height: var(--footer-h);
       background: #fff;
       border-top: 1px solid rgba(0,0,0,.08);
       padding: 10px 16px;
@@ -49,10 +51,19 @@
       z-index: 1030;
     }
 
+    .footer-logo{
+      width: 32px;
+      height: 32px;
+      object-fit: contain;
+      border-radius: 6px;
+      opacity: .7;
+    }
+
     /* ── Navbar ─────────────────────────────────────────────────── */
     .navbar-olive{
       background: var(--olive);
       box-shadow: 0 6px 18px rgba(0,0,0,.12);
+      height: var(--navbar-h);
     }
 
     .brand-wrap{
@@ -60,12 +71,14 @@
       color:#fff; text-decoration:none;
     }
     .brand-wrap img{
-      width: 44px; height: 44px;
+      width: 40px; height: 40px;
       object-fit: contain;
-      background: rgba(255,255,255,.12);
-      border-radius: 10px;
-      padding: 6px;
+      background: none;
+      border-radius: 0;
+      padding: 0;
+      filter: drop-shadow(0 2px 6px rgba(0,0,0,.35));
     }
+
     .brand-title{
       font-weight: 900;
       letter-spacing: .10em;
@@ -188,6 +201,7 @@
     .muted{ color: #6c757d; }
   </style>
 
+  {% block styles %}{% endblock %}
   {% block head_extra %}{% endblock %}
 </head>
 
@@ -195,13 +209,13 @@
 <div class="app-shell">
 
   {# ────────────────────────────────────────────────────────────────
-     Navbar — Navegação principal
+     Navbar — FIXED TOP (com logo)
      ──────────────────────────────────────────────────────────────── #}
-  <nav class="navbar navbar-expand-lg navbar-olive">
+  <nav class="navbar navbar-expand-lg navbar-olive fixed-top">
     <div class="container-fluid px-3">
 
       <a class="brand-wrap" href="{{ url_for('visitor.identify') }}">
-        <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Logo SISPORT">
+        <img src="{{ url_for('static', filename='img/icone.ico') }}" alt="Logo SISPORT">
         <div class="brand-title">SISPORT</div>
       </a>
 
@@ -212,8 +226,6 @@
       <div class="collapse navbar-collapse" id="navMain">
 
         <ul class="navbar-nav ms-auto me-2 gap-1">
-
-          {# ── Portaria (tela inicial — identificação por CPF) ──── #}
           <li class="nav-item">
             <a class="nav-link {% if request.endpoint in ['visitor.identify'] %}active{% endif %}"
                href="{{ url_for('visitor.identify') }}">
@@ -221,7 +233,6 @@
             </a>
           </li>
 
-          {# ── No Interior (visitas em aberto — com badge) ──────── #}
           <li class="nav-item">
             <a class="nav-link {% if request.endpoint in ['visitor.open_visits'] %}active{% endif %}"
                href="{{ url_for('visitor.open_visits') }}">
@@ -232,7 +243,6 @@
             </a>
           </li>
 
-          {# ── Relatório (registro diário de visitas) ───────────── #}
           <li class="nav-item">
             <a class="nav-link {% if request.endpoint in ['visitor.report_page'] %}active{% endif %}"
                href="{{ url_for('visitor.report_page') }}">
@@ -241,7 +251,6 @@
           </li>
         </ul>
 
-        {# Configurações (admin) #}
         <a class="icon-btn" href="{{ url_for('admin.settings_page') }}" title="Configurações" aria-label="Configurações">
           <i class="bi bi-gear-fill fs-5"></i>
         </a>
@@ -270,24 +279,29 @@
   </main>
 
   {# ────────────────────────────────────────────────────────────────
-     Footer
+     Footer (com logo)
      ──────────────────────────────────────────────────────────────── #}
   <footer class="app-footer">
     <div class="container-fluid px-3 px-md-4">
       <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
 
-        <div>
-          <div class="d-flex align-items-center gap-2 mb-1">
-            <i class="bi bi-shield-lock text-success"></i>
-            <strong>SISPORT</strong>
-            <span class="opacity-50">|</span>
-            <span class="muted small">Sistema de Portaria</span>
-          </div>
-          <div class="muted small">
-            Desenvolvido por <strong>Nathan da Cruz Cardoso</strong>
+        {# ── Lado esquerdo: Logo + Nome ── #}
+        <div class="d-flex align-items-center gap-3">
+          <img src="{{ url_for('static', filename='img/icone.ico') }}"
+               alt="SISPORT" class="footer-logo">
+          <div>
+            <div class="d-flex align-items-center gap-2 mb-0">
+              <strong>SISPORT</strong>
+              <span class="opacity-50">|</span>
+              <span class="muted small">Sistema de Portaria</span>
+            </div>
+            <div class="muted small">
+              Desenvolvido por <strong>Nathan da Cruz Cardoso</strong>
+            </div>
           </div>
         </div>
 
+        {# ── Lado direito: Versão + GitHub ── #}
         <div class="d-flex align-items-center gap-3">
           <span class="muted small">Rio de Janeiro, RJ · {{ app_name }} V{{ app_version }}</span>
           <a href="https://github.com/NathanCruzOficial/SISPORT-GUEs"
@@ -320,9 +334,6 @@
 <script src="https://cdn.jsdelivr.net/npm/imask@latest"></script>
 <script src="{{ url_for('static', filename='js/mask.js') }}"></script>
 <script src="{{ url_for('static', filename='js/confirm_modal.js') }}"></script>
-
-{# Pré-carregamento do modelo de detecção facial (global) #}
-<script src="{{ url_for('static', filename='js/face-preloader.js') }}"></script>
 
 {% block scripts %}{% endblock %}
 </body>

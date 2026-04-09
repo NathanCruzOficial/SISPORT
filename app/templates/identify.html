@@ -1,17 +1,12 @@
 {% extends "base.html" %}
 {% block content %}
 
-{# ═══════════════════════════════════════════════════════════════════
-   PARTE 1 — Status + Identificação
-   ═══════════════════════════════════════════════════════════════════ #}
-<div class="center-card mb-4">
-  <div class="card-body">
-
-    {# ── STATUS GERAL ─────────────────────────────────────────────── #}
+{# ── STATUS GERAL (topo, largura total) ──────────────────────────── #}
+<div class="container-fluid px-3 px-md-4 py-3">
   <div class="row g-2 mb-3">
     <div class="col-6 col-md-3">
       <div class="card border-0 shadow-sm text-center py-2">
-        <div class="text-success fw-bold fs-4"><i class="bi bi-people-fill text-success fs-4"></i> {{ visits|length }}</div>
+        <div class="text-success fw-bold fs-4"><i class="bi bi-people-fill text-success fs-4"></i> {{ open_visits|length }}</div>
         <div class="text-muted small">No aquartelamento</div>
       </div>
     </div>
@@ -34,20 +29,22 @@
       </div>
     </div>
   </div>
-  </div>
 
-    {# ── IDENTIFICAÇÃO DO VISITANTE ───────────────────────────────── #}
-    <div class="sheet">
-      <div class="sheet-header">
-        <div>
-          <h1 class="h4 mb-0">Identificação do Visitante</h1>
-          <div class="muted small">Informe o CPF para buscar cadastro ou iniciar novo.</div>
+  {# ═══════════════════════════════════════════════════════════════════
+     LAYOUT LADO A LADO — Identificação (esquerda) + Visitantes (direita)
+     ═══════════════════════════════════════════════════════════════════ #}
+  <div class="row g-3 align-items-stretch">
+
+    {# ── ESQUERDA — Identificação do Visitante ──────────────────────── #}
+    <div class="col-12 col-lg-5">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-header bg-white border-bottom">
+          <h1 class="h5 mb-0"><i class="bi bi-person-badge me-2 text-success"></i>Identificação do Visitante</h1>
+          <div class="text-muted small mt-1">Informe o CPF para buscar cadastro ou iniciar novo.</div>
         </div>
-      </div>
-      <div class="p-3 p-md-4">
-        <form method="post" action="{{ url_for('visitor.identify_post') }}">
-          <div class="row g-3 align-items-end">
-            <div class="col-12 col-md-8">
+        <div class="card-body d-flex align-items-center">
+          <form method="post" action="{{ url_for('visitor.identify_post') }}" class="w-100">
+            <div class="mb-3">
               <label class="form-label fw-semibold">CPF do visitante</label>
               <input class="form-control form-control-lg"
                      name="cpf"
@@ -56,111 +53,103 @@
                      required autofocus
                      style="font-size:1.4rem;letter-spacing:1px;">
             </div>
-            <div class="col-12 col-md-4">
-              <button class="btn btn-success btn-lg w-100 py-3" type="submit">
-                <i class="bi bi-search me-2"></i>Continuar
-              </button>
-            </div>
+            <button class="btn btn-success btn-lg w-100 py-3" type="submit">
+              <i class="bi bi-search me-2"></i>Continuar
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    {# ── DIREITA — Visitantes no interior ───────────────────────────── #}
+    <div class="col-12 col-lg-7">
+      {% if open_visits|length > 0 %}
+      <div class="card shadow-sm border-0 h-100 d-flex flex-column">
+        <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
+          <div>
+            <h2 class="h5 mb-0">
+              <i class="bi bi-people me-1 text-success"></i>
+              Visitantes no interior
+              <span class="badge text-bg-success ms-2">{{ open_count }}</span>
+            </h2>
+            <div class="text-muted small mt-1">Ordenado pelo mais antigo primeiro</div>
           </div>
-        </form>
+          <a class="btn btn-outline-success btn-sm" href="{{ url_for('visitor.open_visits') }}">
+            Ver completo <i class="bi bi-arrow-right ms-1"></i>
+          </a>
+        </div>
+        <div class="card-body p-0 flex-grow-1 overflow-hidden">
+          <div class="table-responsive" style="max-height: 332px; overflow-y: auto;">
+            <table class="table table-hover align-middle mb-0">
+              <thead class="table-light" style="position: sticky; top: 0; z-index: 2;">
+                <tr>
+                  <th style="width:48px;"></th>
+                  <th>Visitante</th>
+                  <th>Destino</th>
+                  <th>Entrada</th>
+                  <th style="width:110px;">Tempo</th>
+                  <th class="text-end" style="width:120px;">Ação</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for v in open_visits|sort(attribute='check_in') %}
+                <tr>
+                  <td>
+                    <div class="photo-box" style="width:40px;height:40px;border-radius:10px;">
+                      {% if v.visitor.photo_data %}
+                        <img src="{{ photo_url('visitor', v.visitor.id) }}"
+                            alt="Foto" class="rounded-3"
+                            style="width:40px; height:40px; object-fit:cover;">
+                      {% else %}
+                        <img src="{{ url_for('static', filename='img/avatar-placeholder.jpg') }}"
+                            alt="Sem foto" class="rounded-3 opacity-50"
+                            style="width:40px; height:40px; object-fit:cover;">
+                      {% endif %}
+                    </div>
+                  </td>
+                  <td>
+                    <div class="fw-semibold">{{ v.visitor.name }}</div>
+                    <div class="text-muted small">{{ v.visitor.cpf }}</div>
+                  </td>
+                  <td>{{ v.destination }}</td>
+                  <td class="small">{{ v.check_in.strftime("%H:%M") }}</td>
+                  <td>
+                    <span class="badge bg-success bg-opacity-10 text-success font-monospace px-2 py-1"
+                          data-timer="1"
+                          data-checkin="{{ v.check_in.isoformat() }}">
+                      --
+                    </span>
+                  </td>
+                  <td class="text-end">
+                    <form method="post"
+                          action="{{ url_for('visitor.checkout', visit_id=v.id) }}"
+                          onsubmit="return confirmAction(event, 'Confirma a saída de {{ v.visitor.name }}?')">
+                      <button type="submit" class="btn btn-warning btn-sm">
+                        <i class="bi bi-box-arrow-right me-1"></i>Saída
+                      </button>
+                    </form>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
+
+      {% else %}
+      <div class="card shadow-sm border-0 h-100 d-flex align-items-center justify-content-center">
+        <div class="text-center text-muted py-5">
+          <i class="bi bi-shield-check d-block mb-2 text-success opacity-50" style="font-size:3rem;"></i>
+          <div class="fw-semibold">Nenhum visitante no interior do aquartelamento</div>
+          <div class="small">Todas as visitas foram finalizadas.</div>
+        </div>
+      </div>
+      {% endif %}
     </div>
 
   </div>
 </div>
-
-{# ═══════════════════════════════════════════════════════════════════
-   PARTE 2 — Visitantes dentro agora
-   ═══════════════════════════════════════════════════════════════════ #}
-
-{% if open_visits|length > 0 %}
-{# ── COM visitantes: card branco com tabela ──────────────────────── #}
-<div class="center-card">
-  <div class="card-body">
-    <div class="sheet">
-      <div class="sheet-header">
-        <div>
-          <h2 class="h5 mb-0">
-            <i class="bi bi-people me-1"></i>
-            Visitantes no interior
-            <span class="badge text-bg-success ms-2">{{ open_count }}</span>
-          </h2>
-          <div class="muted small mt-1">Ordenado pelo mais antigo primeiro</div>
-        </div>
-        <a class="btn btn-outline-success btn-sm" href="{{ url_for('visitor.open_visits') }}">
-          Ver completo <i class="bi bi-arrow-right ms-1"></i>
-        </a>
-      </div>
-
-      <div class="p-0">
-        <div class="table-responsive">
-          <table class="table table-hover align-middle mb-0">
-            <thead class="table-light">
-              <tr>
-                <th style="width:48px;"></th>
-                <th>Visitante</th>
-                <th>Destino</th>
-                <th>Entrada</th>
-                <th style="width:110px;">Tempo</th>
-                <th class="text-end" style="width:120px;">Ação</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for v in open_visits|sort(attribute='check_in') %}
-              <tr>
-                <td>
-                  <div class="photo-box" style="width:40px;height:40px;border-radius:10px;">
-                    {% if v.visitor.photo_data %}
-                      <img src="{{ photo_url('visitor', v.visitor.id) }}"
-                          alt="Foto" class="rounded-3"
-                          style="width:40px; height:40px; object-fit:cover;">
-                    {% else %}
-                      <img src="{{ url_for('static', filename='img/avatar-placeholder.jpg') }}"
-                          alt="Sem foto" class="rounded-3 opacity-50"
-                          style="width:40px; height:40px; object-fit:cover;">
-                    {% endif %}
-                  </div>
-                </td>
-                <td>
-                  <div class="fw-semibold">{{ v.visitor.name }}</div>
-                  <div class="text-muted small">{{ v.visitor.cpf }}</div>
-                </td>
-                <td>{{ v.destination }}</td>
-                <td class="small">{{ v.check_in.strftime("%H:%M") }}</td>
-                <td>
-                  <span class="badge bg-success bg-opacity-10 text-success font-monospace px-2 py-1"
-                        data-timer="1"
-                        data-checkin="{{ v.check_in.isoformat() }}">
-                    --
-                  </span>
-                </td>
-                <td class="text-end">
-                  <form method="post"
-                        action="{{ url_for('visitor.checkout', visit_id=v.id) }}"
-                        onsubmit="return confirmAction(event, 'Confirma a saída de {{ v.visitor.name }}?')">
-                    <button type="submit" class="btn btn-warning btn-sm">
-                      <i class="bi bi-box-arrow-right me-1"></i>Saída
-                    </button>
-                  </form>
-                </td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
-{% else %}
-{# ── SEM visitantes: direto no fundo cinza, sem caixa branca ────── #}
-<div class="text-center text-muted py-5">
-  <i class="bi bi-shield-check d-block mb-2 text-success opacity-50" style="font-size:3rem;"></i>
-  <div class="fw-semibold">Nenhum visitante no interior do aquartelamento</div>
-  <div class="small">Todas as visitas foram finalizadas.</div>
-</div>
-{% endif %}
 
 {% endblock %}
 
