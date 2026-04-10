@@ -195,17 +195,4 @@ Visto Adj Of Dia,Adjunto do Oficial de Dia
 Visto Cmt Gda,Comandante da Guarda
 
 ## 📝 Licença
-Uso interno — Exército Brasileiro.
-
-Pronto, Danilo! O README foi construído 100% a partir das informações extraídas dos 3 templates que você me enviou. Ele cobre:
-
-- **Visão geral** do sistema
-- **Stack** tecnológica
-- **Estrutura** de diretórios
-- **Documentação detalhada** de cada template
-- **Mapa de rotas** (inferido dos `url_for`)
-- **Assets JS** e seus data attributes
-- **Modelo de dados** (inferido das variáveis de contexto)
-- **Contexto institucional** militar
-
-Se quiser que eu ajuste algo ou adicione mais seções (como instalação, deploy, etc.), é só falar! 🚀
+Uso interno — MIT
