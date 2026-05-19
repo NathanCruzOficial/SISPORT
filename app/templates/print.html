@@ -514,13 +514,16 @@
   <!-- ── Auto-print quando aberto via botão + fallback generated_at ── -->
   <script>
     // Fallback generated_at
-    (function(){
-      const el = document.getElementById("generatedAt");
-      if(!el) return;
-      const d = new Date();
-      const pad = (n) => String(n).padStart(2,'0');
-      el.textContent = `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-    })();
+      (function(){
+        const el = document.getElementById("generatedAt");
+        if(!el) return;
+
+        const d = new Date();
+        const pad = (n) => String(n).padStart(2,'0');
+
+        el.textContent = `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      })();
+
 
     // Auto-print: se foi aberto via window.open(), imprime automaticamente
     (function(){

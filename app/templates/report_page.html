@@ -261,12 +261,48 @@
 <script>
 // ── Imprimir — monta a URL com os filtros ATUAIS do form ────────
 document.getElementById('btnPrint').addEventListener('click', function(){
-  var form   = document.getElementById('filter-form');
-  var params = new URLSearchParams(new FormData(form));
-  var url    = "{{ url_for('visitor.report_print') }}" + '?' + params.toString();
-  window.open(url, '_blank');
+  const form = document.getElementById('filter-form');
+  const params = new URLSearchParams(new FormData(form));
+
+  const url = "{{ url_for('visitor.report_print') }}" + "?" + params.toString();
+
+  imprimirRelatorio(url);
 });
 
+function imprimirRelatorio(url){
+  let iframe = document.getElementById('printFrame');
+
+  if (iframe) {
+    iframe.remove();
+  }
+
+  iframe = document.createElement('iframe');
+  iframe.id = 'printFrame';
+
+  /*
+    Importante:
+    Não use display:none, pois alguns navegadores/WebViews não imprimem iframe escondido assim.
+  */
+  iframe.style.position = 'fixed';
+  iframe.style.right = '0';
+  iframe.style.bottom = '0';
+  iframe.style.width = '1px';
+  iframe.style.height = '1px';
+  iframe.style.border = '0';
+  iframe.style.opacity = '0';
+  iframe.style.pointerEvents = 'none';
+
+  iframe.onload = function(){
+    setTimeout(function(){
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+    }, 500);
+  };
+
+  iframe.src = url;
+
+  document.body.appendChild(iframe);
+}
 
 
 
