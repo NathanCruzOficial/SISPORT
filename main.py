@@ -15,9 +15,9 @@
 #   (O console é SEMPRE oculto; quando necessário, alocamos via Win32)
 # =====================================================================
 
-# ─────────────────────────────────────────────────────────────────────
+# =====================================================================
 # Imports
-# ─────────────────────────────────────────────────────────────────────
+# =====================================================================
 import ctypes
 import logging
 import platform
@@ -29,9 +29,9 @@ import webbrowser
 from app.paths import APP_DIR, ensure_app_dirs, log_path, icon_path
 
 
-
-
-# ─── AppUserModelID (Desagrupa o sistema do python normal) ───
+# =====================================================================
+# AppUserModelID (Windows)
+# =====================================================================
 if platform.system() == "Windows":
     ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("com.sisport.app")
 
@@ -81,8 +81,10 @@ HOST = "127.0.0.1"
 PORT = 5000
 
 
+
+
 # =====================================================================
-# Detecção de Isntância existente do sistema.
+# Detecção de instância existente do sistema
 # =====================================================================
 
 def _ensure_single_instance():
@@ -271,8 +273,6 @@ def _run_webview_mode():
         sys.exit(1)
 
     log.info("Servidor pronto. Abrindo janela Webview.")
-
-    # ✅ Caminho absoluto do ícone
 
     webview.create_window(
         APP_NAME,

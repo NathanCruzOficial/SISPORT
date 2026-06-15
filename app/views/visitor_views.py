@@ -9,7 +9,6 @@
 # ─────────────────────────────────────────────────────────────────────
 # Imports
 # ─────────────────────────────────────────────────────────────────────
-from datetime import date, datetime
 
 from flask import (
     Blueprint,
@@ -38,6 +37,12 @@ from ..controllers.visitor_controller import (
 )
 from ..utils.validators import normalize_cpf, is_valid_cpf, validate_required_email
 from sqlalchemy.exc import IntegrityError
+
+from calendar import monthrange
+from collections import Counter
+from datetime import date, datetime, timedelta
+
+
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -281,6 +286,529 @@ def serve_photo(source, record_id):
         mimetype=photo_mime or "image/jpeg",
         headers={"Cache-Control": "no-store"},
     )
+
+# =====================================================================
+# Rotas — Dashboard
+# =====================================================================
+
+@visitor_bp.route("/dashboard", methods=["GET"])
+def dashboard():
+    """
+    Dashboard gerencial com indicadores e gráficos de visitas.
+    Usa filtros por ano e mês.
+    """
+
+    dashboard_data = _build_dashboard_data()
+
+    return render_template(
+        "dashboard.html",
+        title="Dashboard",
+        **dashboard_data,
+    )
+
+
+@visitor_bp.route("/dashboard/print", methods=["GET"])
+def dashboard_print():
+    """
+    Versão de impressão do Dashboard.
+    Usa os mesmos filtros da tela principal.
+    """
+
+    dashboard_data = _build_dashboard_data()
+
+    return render_template(
+        "dashboard_print.html",
+        title="Impressão do Dashboard",
+        generated_at=datetime.now(),
+        **dashboard_data,
+    )
+
+
+def _build_dashboard_data():
+    """
+    Monta todos os dados necessários para o Dashboard e para a impressão.
+
+    Filtros:
+    - year: ano selecionado.
+    - month: mês final do período.
+        0 = todos os meses disponíveis do ano.
+        1..12 = de janeiro até o mês selecionado.
+
+    Exemplo:
+    year=2026, month=5
+    Resultado: período de 01/01/2026 até 31/05/2026,
+    ou até a data atual se for o ano/mês corrente.
+    """
+
+    today = date.today()
+
+    meses_nomes = [
+        "Janeiro",
+        "Fevereiro",
+        "Março",
+        "Abril",
+        "Maio",
+        "Junho",
+        "Julho",
+        "Agosto",
+        "Setembro",
+        "Outubro",
+        "Novembro",
+        "Dezembro",
+    ]
+
+    # ─────────────────────────────────────────────────────────────
+    # Anos disponíveis
+    # ─────────────────────────────────────────────────────────────
+    year_rows = (
+        db.session.query(db.extract("year", Visit.check_in))
+        .filter(Visit.check_in.isnot(None))
+        .distinct()
+        .all()
+    )
+
+    anos_disponiveis = sorted(
+        {int(row[0]) for row in year_rows if row[0] is not None},
+        reverse=True,
+    )
+
+    if not anos_disponiveis:
+        anos_disponiveis = [today.year]
+
+    # ─────────────────────────────────────────────────────────────
+    # Filtros recebidos pela URL
+    # ─────────────────────────────────────────────────────────────
+    try:
+        selected_year = int(request.args.get("year", today.year))
+    except ValueError:
+        selected_year = today.year
+
+    if selected_year not in anos_disponiveis:
+        selected_year = anos_disponiveis[0]
+
+    try:
+        selected_month = int(request.args.get("month", 0))
+    except ValueError:
+        selected_month = 0
+
+    if selected_month < 0 or selected_month > 12:
+        selected_month = 0
+
+    # Evita selecionar mês futuro no ano atual
+    if selected_year == today.year and selected_month > today.month:
+        selected_month = today.month
+
+    # ─────────────────────────────────────────────────────────────
+    # Período filtrado
+    #
+    # month = 0  → ano inteiro
+    # month = 1  → somente janeiro
+    # month = 2  → somente fevereiro
+    # ...
+    # month = 12 → somente dezembro
+    # ─────────────────────────────────────────────────────────────
+    if selected_month == 0:
+        dt_from = date(selected_year, 1, 1)
+
+        if selected_year == today.year:
+            dt_to = today
+        else:
+            dt_to = date(selected_year, 12, 31)
+    else:
+        dt_from = date(selected_year, selected_month, 1)
+
+        last_day = monthrange(selected_year, selected_month)[1]
+        dt_to = date(selected_year, selected_month, last_day)
+
+        # Se for o mês atual, limita até hoje
+        if selected_year == today.year and selected_month == today.month:
+            dt_to = today
+
+
+    # ─────────────────────────────────────────────────────────────
+    # Consulta das visitas no período
+    # ─────────────────────────────────────────────────────────────
+    visits = (
+        db.session.query(Visit)
+        .join(Visitor, Visit.visitor_id == Visitor.id)
+        .filter(db.func.date(Visit.check_in) >= dt_from)
+        .filter(db.func.date(Visit.check_in) <= dt_to)
+        .order_by(Visit.check_in.asc())
+        .all()
+    )
+
+    total_visits = len(visits)
+
+    total_visitors = db.session.query(Visitor).count()
+
+
+    closed_visits = [
+        v for v in visits
+        if v.check_out is not None
+    ]
+
+
+    # ─────────────────────────────────────────────────────────────
+    # Detalhamento das visitas para análise dos gráficos
+    # Usado no Dashboard para abrir modal ao clicar em colunas/fatias
+    # ─────────────────────────────────────────────────────────────
+    visit_details = []
+
+    for visit in visits:
+        visitor_name = visit.visitor.name if visit.visitor else "Não informado"
+        visitor_category = visit.visitor.category if visit.visitor else "civil"
+
+        check_in = visit.check_in
+        check_out = visit.check_out
+
+        duration = "-"
+
+        if check_in and check_out:
+            duration_seconds = int((check_out - check_in).total_seconds())
+            duration = _format_seconds_hms(duration_seconds)
+
+        visit_details.append({
+            "id": visit.id,
+            "visitor_name": visitor_name,
+            "category": visitor_category,
+            "destination": (visit.destination or "Não informado").strip().upper(),
+            "check_in": check_in.strftime("%d/%m/%Y %H:%M") if check_in else "-",
+            "check_out": check_out.strftime("%d/%m/%Y %H:%M") if check_out else "Em aberto",
+            "duration": duration,
+            "month": check_in.month if check_in else None,
+            "weekday": check_in.weekday() if check_in else None,
+            "hour": check_in.hour if check_in else None,
+        })
+
+    # ─────────────────────────────────────────────────────────────
+    # Tempo médio de permanência
+    # ─────────────────────────────────────────────────────────────
+    avg_seconds = 0
+
+    if closed_visits:
+        total_seconds = sum(
+            int((v.check_out - v.check_in).total_seconds())
+            for v in closed_visits
+        )
+        avg_seconds = int(total_seconds / len(closed_visits))
+
+    avg_duration = _format_seconds_hms(avg_seconds)
+    
+    # ─────────────────────────────────────────────────────────────
+    # Indicadores principais do Dashboard
+    # Estrutura preparada para inclusão futura de novos indicadores
+    # ─────────────────────────────────────────────────────────────
+    dashboard_indicators = [
+        {
+            "label": "Visitas no período",
+            "value": total_visits,
+            "icon": "bi-calendar-check",
+        },
+        {
+            "label": "Visitantes cadastrados",
+            "value": total_visitors,
+            "icon": "bi-person-vcard",
+        },
+        {
+            "label": "Tempo médio",
+            "value": avg_duration,
+            "icon": "bi-clock-history",
+        },
+        # Futuramente, basta incluir novos itens aqui:
+        # {
+        #     "label": "Alterações",
+        #     "value": total_alteracoes,
+        #     "icon": "bi-exclamation-triangle",
+        # },
+        # {
+        #     "label": "Objetos perdidos",
+        #     "value": total_objetos_perdidos,
+        #     "icon": "bi-box-seam",
+        # },
+    ]
+
+
+    # ─────────────────────────────────────────────────────────────
+    # Visitas por mês
+    # ─────────────────────────────────────────────────────────────
+    month_counter = Counter(
+        v.check_in.month for v in visits
+    )
+
+    if selected_month == 0:
+        months_to_show = list(range(1, dt_to.month + 1))
+    else:
+        months_to_show = [selected_month]
+
+
+    visits_by_month_labels = [
+        meses_nomes[m - 1] for m in months_to_show
+    ]
+
+    visits_by_month_values = [
+        month_counter.get(m, 0) for m in months_to_show
+    ]
+
+    # ─────────────────────────────────────────────────────────────
+    # Visitas por dia da semana
+    # ─────────────────────────────────────────────────────────────
+    weekday_names = [
+        "Segunda",
+        "Terça",
+        "Quarta",
+        "Quinta",
+        "Sexta",
+        "Sábado",
+        "Domingo",
+    ]
+
+    weekday_counter = Counter(
+        v.check_in.weekday() for v in visits
+    )
+
+    visits_by_weekday_labels = weekday_names
+
+    visits_by_weekday_values = [
+        weekday_counter.get(i, 0) for i in range(7)
+    ]
+
+    # ─────────────────────────────────────────────────────────────
+    # Visitas por dia (usado quando um mês específico está filtrado)
+    # ─────────────────────────────────────────────────────────────
+    visits_by_day_labels = []
+    visits_by_day_values = []
+
+    if selected_month != 0:
+        last_day = monthrange(selected_year, selected_month)[1]
+
+        day_counter = Counter()
+
+        for visit in visits:
+            if visit.check_in and visit.check_in.month == selected_month:
+                day_counter[visit.check_in.day] += 1
+
+        for day in range(1, last_day + 1):
+            visits_by_day_labels.append(f"{day:02d}")
+            visits_by_day_values.append(day_counter.get(day, 0))
+
+
+    # ─────────────────────────────────────────────────────────────
+    # Destinos mais visitados
+    # ─────────────────────────────────────────────────────────────
+    destination_counter = Counter(
+        (v.destination or "Não informado").strip().upper()
+        for v in visits
+    )
+
+    top_destinations = destination_counter.most_common(10)
+
+    top_destination_labels = [
+        item[0] for item in top_destinations
+    ]
+
+    top_destination_values = [
+        item[1] for item in top_destinations
+    ]
+
+    # ─────────────────────────────────────────────────────────────
+    # Categorias de visitante
+    # ─────────────────────────────────────────────────────────────
+    category_labels_map = {
+        "civil": "Civil",
+        "militar": "Militar",
+        "ex-militar": "Ex-Militar",
+    }
+
+    category_counter = Counter(
+        v.visitor.category or "civil"
+        for v in visits
+    )
+
+    ordered_categories = [
+        "civil",
+        "militar",
+        "ex-militar",
+    ]
+
+    category_labels = [
+        category_labels_map.get(category, category.capitalize())
+        for category in ordered_categories
+    ]
+
+    category_values = [
+        category_counter.get(category, 0)
+        for category in ordered_categories
+    ]
+
+    unknown_categories_total = sum(
+        count
+        for category, count in category_counter.items()
+        if category not in ordered_categories
+    )
+
+    if unknown_categories_total:
+        category_labels.append("Outros")
+        category_values.append(unknown_categories_total)
+
+    # ─────────────────────────────────────────────────────────────
+    # Média de pessoas presentes por horário
+    # Considera o período entre check_in e check_out
+    # ─────────────────────────────────────────────────────────────
+    presence_by_hour_labels, presence_by_hour_values = _build_presence_by_hour(
+        dt_from=dt_from,
+        dt_to=dt_to,
+    )
+
+
+    # ─────────────────────────────────────────────────────────────
+    # Texto do filtro
+    # ─────────────────────────────────────────────────────────────
+    if selected_month == 0:
+        selected_month_name = "Todos"
+        selected_period_label = f"Ano de {selected_year}"
+    else:
+        selected_month_name = meses_nomes[selected_month - 1]
+        selected_period_label = f"{selected_month_name} de {selected_year}"
+
+
+    filters = {
+        "date_from": dt_from.strftime("%Y-%m-%d"),
+        "date_to": dt_to.strftime("%Y-%m-%d"),
+        "date_from_fmt": dt_from.strftime("%d/%m/%Y"),
+        "date_to_fmt": dt_to.strftime("%d/%m/%Y"),
+        "period_label": selected_period_label,
+    }
+
+    return {
+        "filters": filters,
+
+        "selected_year": selected_year,
+        "selected_month": selected_month,
+        "selected_month_name": selected_month_name,
+
+        "anos_disponiveis": anos_disponiveis,
+        "meses_nomes": meses_nomes,
+
+        "dashboard_indicators": dashboard_indicators,
+
+        "total_visits": total_visits,
+        "total_visitors": total_visitors,
+        "avg_duration": avg_duration,
+
+        "visits_by_month_labels": visits_by_month_labels,
+        "visits_by_month_values": visits_by_month_values,
+
+        "visits_by_weekday_labels": visits_by_weekday_labels,
+        "visits_by_weekday_values": visits_by_weekday_values,
+
+        "visits_by_day_labels": visits_by_day_labels,
+        "visits_by_day_values": visits_by_day_values,
+
+
+        "top_destination_labels": top_destination_labels,
+        "top_destination_values": top_destination_values,
+        "top_destinations": top_destinations,
+
+        "category_labels": category_labels,
+        "category_values": category_values,
+
+        "presence_by_hour_labels": presence_by_hour_labels,
+        "presence_by_hour_values": presence_by_hour_values,
+
+        "visit_details": visit_details
+    }
+
+def _build_presence_by_hour(dt_from: date, dt_to: date):
+    """
+    Calcula a média de pessoas presentes no aquartelamento por faixa horária.
+
+    Diferente de contar apenas entradas por hora, esta função considera
+    o período completo de permanência da pessoa:
+
+    check_in até check_out.
+
+    Resultado:
+    - Labels: 00:00 até 23:00
+    - Valores: média de pessoas presentes naquela hora ao longo do período
+    """
+
+    period_start = datetime.combine(dt_from, datetime.min.time())
+    period_end = datetime.combine(dt_to, datetime.max.time())
+
+    today = date.today()
+
+    # Se o período inclui o dia atual, não faz sentido projetar até 23:59
+    if dt_to >= today:
+        period_end = min(period_end, datetime.now())
+
+    overlapping_visits = (
+        db.session.query(Visit)
+        .filter(Visit.check_in <= period_end)
+        .filter(
+            db.or_(
+                Visit.check_out.is_(None),
+                Visit.check_out >= period_start,
+            )
+        )
+        .all()
+    )
+
+    seconds_by_hour = [0 for _ in range(24)]
+
+    for visit in overlapping_visits:
+        start = max(visit.check_in, period_start)
+
+        if visit.check_out:
+            end = min(visit.check_out, period_end)
+        else:
+            end = period_end
+
+        if end <= start:
+            continue
+
+        cursor = start
+
+        while cursor < end:
+            next_hour = (
+                cursor
+                .replace(minute=0, second=0, microsecond=0)
+                + timedelta(hours=1)
+            )
+
+            segment_end = min(end, next_hour)
+
+            seconds_by_hour[cursor.hour] += (
+                segment_end - cursor
+            ).total_seconds()
+
+            cursor = segment_end
+
+    days_count = max(1, (dt_to - dt_from).days + 1)
+
+    labels = [
+        f"{hour:02d}:00" for hour in range(24)
+    ]
+
+    values = [
+        round((seconds / 3600) / days_count, 2)
+        for seconds in seconds_by_hour
+    ]
+
+    return labels, values
+
+
+def _format_seconds_hms(seconds: int) -> str:
+    """
+    Formata segundos em HH:MM:SS.
+    """
+
+    seconds = max(0, int(seconds))
+
+    h = seconds // 3600
+    m = (seconds % 3600) // 60
+    s = seconds % 60
+
+    return f"{h:02d}:{m:02d}:{s:02d}"
 
 
 # =====================================================================

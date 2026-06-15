@@ -1,0 +1,588 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+
+  <title>Dashboard SISPORT</title>
+
+  <style>
+    @page {
+      size: A4 landscape;
+      margin: 12mm;
+    }
+
+    body {
+      margin: 0;
+      background: #ffffff;
+      color: #111827;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 12px;
+    }
+
+    .no-print {
+      margin-bottom: 12px;
+    }
+
+    .btn {
+      display: inline-block;
+      padding: 6px 10px;
+      border: 1px solid #999;
+      border-radius: 4px;
+      background: #f8f9fa;
+      color: #111;
+      text-decoration: none;
+      cursor: pointer;
+      font-size: 12px;
+    }
+
+    .btn-primary {
+      background: #556B2F;
+      color: #fff;
+      border-color: #556B2F;
+    }
+
+    .print-header {
+      border-bottom: 2px solid #222;
+      padding-bottom: 8px;
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+    }
+
+    .print-title {
+      font-size: 20px;
+      font-weight: 800;
+      margin: 0 0 4px 0;
+    }
+
+    .print-subtitle {
+      font-size: 12px;
+      color: #555;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .summary-card {
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      padding: 8px;
+      background: #f8f9fa;
+    }
+
+    .summary-label {
+      font-size: 10px;
+      color: #555;
+      margin-bottom: 4px;
+    }
+
+    .summary-value {
+      font-size: 17px;
+      font-weight: 800;
+    }
+
+    .chart-section {
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      padding: 8px;
+      margin-bottom: 9px;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+
+    .chart-title {
+      font-size: 13px;
+      font-weight: 800;
+      margin-bottom: 6px;
+    }
+
+    .chart-box-large {
+      height: 250px;
+      position: relative;
+    }
+
+    .chart-box {
+      height: 205px;
+      position: relative;
+    }
+
+    .two-columns {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 9px;
+    }
+
+    .three-columns {
+      display: grid;
+      grid-template-columns: 1.2fr .9fr .9fr;
+      gap: 9px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+    }
+
+    th,
+    td {
+      border: 1px solid #ccc;
+      padding: 5px;
+      text-align: left;
+    }
+
+    th {
+      background: #f1f3f5;
+      font-weight: 800;
+    }
+
+    .text-center {
+      text-align: center;
+    }
+
+    .print-footer {
+      margin-top: 8px;
+      padding-top: 6px;
+      border-top: 1px solid #ccc;
+      font-size: 10px;
+      color: #555;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    @media print {
+      .no-print {
+        display: none !important;
+      }
+
+      body {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="no-print">
+    <button onclick="window.print()" class="btn btn-primary">
+      Imprimir
+    </button>
+
+    <button onclick="window.close()" class="btn">
+      Fechar
+    </button>
+  </div>
+
+  <header class="print-header">
+    <div>
+      <h1 class="print-title">Dashboard Gerencial — SISPORT</h1>
+
+      <div class="print-subtitle">
+        Período:
+        <strong>{{ filters.date_from_fmt }}</strong>
+        até
+        <strong>{{ filters.date_to_fmt }}</strong>
+        · Ano:
+        <strong>{{ selected_year }}</strong>
+        · Mês:
+        <strong>{{ selected_month_name }}</strong>
+      </div>
+    </div>
+
+    <div class="print-subtitle" style="text-align: right;">
+      Gerado em:<br>
+      <strong>{{ generated_at.strftime("%d/%m/%Y %H:%M") }}</strong>
+    </div>
+  </header>
+
+  <section class="summary-grid">
+  {% for indicator in dashboard_indicators %}
+  <div class="summary-card">
+    <div class="summary-label">{{ indicator.label }}</div>
+    <div class="summary-value">{{ indicator.value }}</div>
+  </div>
+  {% endfor %}
+</section>
+
+<section class="chart-section">
+  {% if selected_month == 0 %}
+    <div class="chart-title">Visitas por mês</div>
+    <div class="chart-box-large">
+      <canvas id="chartVisitsByMonth"></canvas>
+    </div>
+  {% else %}
+    <div class="chart-title">
+      Visitas por dia em {{ selected_month_name }}/{{ selected_year }}
+    </div>
+    <div class="chart-box-large">
+      <canvas id="chartVisitsByDay"></canvas>
+    </div>
+  {% endif %}
+</section>
+
+
+  <section class="three-columns">
+    <div class="chart-section">
+      <div class="chart-title">Destinos / Unidades mais visitadas</div>
+
+      <div class="chart-box">
+        <canvas id="chartTopDestinations"></canvas>
+      </div>
+    </div>
+
+    <div class="chart-section">
+      <div class="chart-title">Categorias</div>
+
+      <div class="chart-box">
+        <canvas id="chartCategories"></canvas>
+      </div>
+    </div>
+
+    <div class="chart-section">
+      <div class="chart-title">Visitas por dia da semana</div>
+
+      <div class="chart-box">
+        <canvas id="chartVisitsByWeekday"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <section class="two-columns">
+    <div class="chart-section">
+      <div class="chart-title">Média de pessoas presentes por horário
+    </div>
+
+      <div class="chart-box">
+        <canvas id="chartPresenceByHour"></canvas>
+      </div>
+    </div>
+
+    <div class="chart-section">
+      <div class="chart-title">Ranking de destinos mais visitados</div>
+
+      {% if top_destinations %}
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 50px;">#</th>
+            <th>Destino</th>
+            <th style="width: 90px;" class="text-center">Quantidade</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {% for destination, count in top_destinations %}
+          <tr>
+            <td class="text-center">{{ loop.index }}</td>
+            <td>{{ destination }}</td>
+            <td class="text-center">{{ count }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p>Nenhuma visita encontrada no período selecionado.</p>
+      {% endif %}
+    </div>
+  </section>
+
+  <footer class="print-footer">
+    <span>SISPORT — Sistema de Portaria</span>
+    <span>Documento gerado automaticamente</span>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+  // ── Plugin: exibe valores acima das colunas/pontos ──────────────
+  const chartValueLabelPlugin = {
+    id: "chartValueLabelPlugin",
+    afterDatasetsDraw(chart) {
+      const { ctx } = chart;
+      const pluginOptions = chart.options.plugins.chartValueLabelPlugin || {};
+      if (pluginOptions.enabled === false) return;
+
+      ctx.save();
+
+      chart.data.datasets.forEach(function (dataset, datasetIndex) {
+        const meta = chart.getDatasetMeta(datasetIndex);
+        if (meta.hidden) return;
+
+        if (chart.config.type === "doughnut" || chart.config.type === "pie") {
+          const centerX = (chart.chartArea.left + chart.chartArea.right) / 2;
+          const centerY = (chart.chartArea.top + chart.chartArea.bottom) / 2;
+
+          meta.data.forEach(function (arc, index) {
+            const value = dataset.data[index];
+            if (!value) return;
+
+            const angle      = (arc.startAngle + arc.endAngle) / 2;
+            const outerRadius = arc.outerRadius + 18;
+            const x          = centerX + Math.cos(angle) * outerRadius;
+            const y          = centerY + Math.sin(angle) * outerRadius;
+
+            ctx.font         = "bold 11px Arial";
+            ctx.fillStyle    = "#333";
+            ctx.textAlign    = x > centerX ? "left" : "right";
+            ctx.textBaseline = "middle";
+
+            const lineStartX = centerX + Math.cos(angle) * (arc.outerRadius + 2);
+            const lineStartY = centerY + Math.sin(angle) * (arc.outerRadius + 2);
+
+            ctx.beginPath();
+            ctx.moveTo(lineStartX, lineStartY);
+            ctx.lineTo(x - (x > centerX ? 4 : -4), y);
+            ctx.strokeStyle = "rgba(0,0,0,.4)";
+            ctx.lineWidth   = 1;
+            ctx.stroke();
+
+            ctx.fillText(value, x, y);
+          });
+          return;
+        }
+
+        meta.data.forEach(function (element, index) {
+          const value = dataset.data[index];
+          if (value === null || value === undefined || Number(value) === 0) return;
+
+          ctx.font         = "bold 11px Arial";
+          ctx.fillStyle    = "#333";
+          ctx.textAlign    = "center";
+          ctx.textBaseline = "bottom";
+
+          const position = element.tooltipPosition();
+
+          if (chart.config.type === "bar" && chart.options.indexAxis === "y") {
+            ctx.textAlign    = "left";
+            ctx.textBaseline = "middle";
+            ctx.fillText(value, position.x + 8, position.y);
+            return;
+          }
+
+          ctx.fillText(value, position.x, position.y - 6);
+        });
+      });
+
+      ctx.restore();
+    }
+  };
+
+  Chart.register(chartValueLabelPlugin);
+</script>
+
+
+<script>
+  Chart.defaults.animation  = false;
+  Chart.defaults.responsive = true;
+  Chart.defaults.maintainAspectRatio = false;
+  Chart.defaults.font.family = "Arial, Helvetica, sans-serif";
+  Chart.defaults.color = "#333";
+
+  const olive     = "#556B2F";
+  const oliveDark = "#3F5222";
+  const green     = "#198754";
+  const blue      = "#0d6efd";
+  const yellow    = "#ffc107";
+  const gray      = "#6c757d";
+
+  const visitsByMonthLabels   = {{ visits_by_month_labels   | tojson }};
+  const visitsByMonthValues   = {{ visits_by_month_values   | tojson }};
+  const visitsByDayLabels     = {{ visits_by_day_labels     | tojson }};
+  const visitsByDayValues     = {{ visits_by_day_values     | tojson }};
+  const visitsByWeekdayLabels = {{ visits_by_weekday_labels | tojson }};
+  const visitsByWeekdayValues = {{ visits_by_weekday_values | tojson }};
+  const topDestinationLabels  = {{ top_destination_labels   | tojson }};
+  const topDestinationValues  = {{ top_destination_values   | tojson }};
+  const categoryLabels        = {{ category_labels          | tojson }};
+  const categoryValues        = {{ category_values          | tojson }};
+  const presenceByHourLabels  = {{ presence_by_hour_labels  | tojson }};
+  const presenceByHourValues  = {{ presence_by_hour_values  | tojson }};
+  const selectedMonth         = {{ selected_month           | tojson }};
+
+  // ── Gráfico principal: meses (bar) ou dias (line) ───────────────
+  if (selectedMonth === 0) {
+    new Chart(document.getElementById("chartVisitsByMonth"), {
+      type: "bar",
+      data: {
+        labels: visitsByMonthLabels,
+        datasets: [{
+          label: "Visitas",
+          data: visitsByMonthValues,
+          backgroundColor: olive,
+          borderRadius: 6
+        }]
+      },
+      options: {
+        plugins: {
+          legend: { display: false }
+        },
+        scales: {
+          y: { beginAtZero: true, ticks: { precision: 0 } }
+        },
+        layout: { padding: { top: 20 } }
+      }
+    });
+  } else {
+    // ── Ondas com números em cima de cada ponto ─────────────────
+    new Chart(document.getElementById("chartVisitsByDay"), {
+      type: "line",
+      data: {
+        labels: visitsByDayLabels,
+        datasets: [{
+          label: "Visitas",
+          data: visitsByDayValues,
+          borderColor: olive,
+          backgroundColor: "rgba(85, 107, 47, .22)",
+          borderWidth: 3,
+          tension: .45,
+          fill: true,
+          pointRadius: 3,
+          pointHoverRadius: 7,
+          pointBackgroundColor: "#fff",
+          pointBorderColor: olive,
+          pointBorderWidth: 2
+        }]
+      },
+      options: {
+        plugins: {
+          legend: { display: false },
+          // plugin de rótulos habilitado (padrão)
+        },
+        scales: {
+          x: {
+            title: { display: true, text: "Dia do mês" }
+          },
+          y: { beginAtZero: true, ticks: { precision: 0 } }
+        },
+        layout: { padding: { top: 20 } }
+      }
+    });
+  }
+
+  // ── Destinos ────────────────────────────────────────────────────
+  new Chart(document.getElementById("chartTopDestinations"), {
+    type: "bar",
+    data: {
+      labels: topDestinationLabels,
+      datasets: [{
+        label: "Visitas",
+        data: topDestinationValues,
+        backgroundColor: oliveDark,
+        borderRadius: 6
+      }]
+    },
+    options: {
+      indexAxis: "y",
+      plugins: { legend: { display: false } },
+      scales: { x: { beginAtZero: true, ticks: { precision: 0 } } },
+      layout: { padding: { right: 30 } }
+    }
+  });
+
+  // ── Categorias ──────────────────────────────────────────────────
+  new Chart(document.getElementById("chartCategories"), {
+    type: "doughnut",
+    data: {
+      labels: categoryLabels,
+      datasets: [{
+        data: categoryValues,
+        backgroundColor: [blue, olive, yellow, gray],
+        borderColor: "#ffffff",
+        borderWidth: 2
+      }]
+    },
+    options: {
+      cutout: "60%",
+      plugins: { legend: { position: "bottom" } },
+      layout: { padding: { top: 20, bottom: 20, left: 30, right: 30 } }
+    }
+  });
+
+  // ── Dias da semana ───────────────────────────────────────────────
+  new Chart(document.getElementById("chartVisitsByWeekday"), {
+    type: "bar",
+    data: {
+      labels: visitsByWeekdayLabels,
+      datasets: [{
+        label: "Visitas",
+        data: visitsByWeekdayValues,
+        backgroundColor: blue,
+        borderRadius: 6
+      }]
+    },
+    options: {
+      plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
+      layout: { padding: { top: 20 } }
+    }
+  });
+
+  // ── Presença por horário (6h–18h, sem rótulos de número) ────────
+  const filteredLabels = [];
+  const filteredValues = [];
+
+  function formatHourLabel(label) {
+    const h = Number(String(label).split(":")[0]);
+    if (h === 0)  return "12am";
+    if (h === 12) return "12pm";
+    if (h < 12)   return h + "am";
+    return (h - 12) + "pm";
+  }
+
+  presenceByHourLabels.forEach(function (label, idx) {
+    const h = Number(String(label).split(":")[0]);
+    if (h >= 6 && h <= 18) {
+      filteredLabels.push(formatHourLabel(label));
+      filteredValues.push(presenceByHourValues[idx]);
+    }
+  });
+
+  new Chart(document.getElementById("chartPresenceByHour"), {
+    type: "line",
+    data: {
+      labels: filteredLabels,
+      datasets: [{
+        label: "Média de pessoas presentes",
+        data: filteredValues,
+        borderColor: green,
+        backgroundColor: "rgba(25, 135, 84, .18)",
+        borderWidth: 3,
+        tension: .45,
+        fill: true,
+        pointRadius: 2
+      }]
+    },
+    options: {
+      plugins: {
+        // Desliga os rótulos numéricos neste gráfico (igual ao dashboard.js)
+        chartValueLabelPlugin: { enabled: false },
+        legend: { display: false }
+      },
+      scales: {
+        x: {
+          ticks: { autoSkip: false, maxRotation: 0, minRotation: 0 },
+          title: { display: true, text: "Horário" }
+        },
+        y: {
+          beginAtZero: true,
+          ticks: { precision: 0 },
+          title: { display: true, text: "Média de pessoas" }
+        }
+      },
+      layout: { padding: { top: 10 } }
+    }
+  });
+</script>
+
+
+</body>
+</html>
