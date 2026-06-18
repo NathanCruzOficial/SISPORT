@@ -10,7 +10,7 @@
 # Imports
 # ─────────────────────────────────────────────────────────────────────
 from flask_sqlalchemy import SQLAlchemy
-
+from flask_migrate import Migrate
 
 # =====================================================================
 # Extensão — SQLAlchemy (ORM / Banco de Dados)
@@ -28,3 +28,4 @@ from flask_sqlalchemy import SQLAlchemy
 #   class MeuModelo(db.Model): ...
 
 db = SQLAlchemy()
+migrate = Migrate()

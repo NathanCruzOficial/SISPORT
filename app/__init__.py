@@ -11,7 +11,7 @@
 # ─────────────────────────────────────────────────────────────────────
 from flask import Flask, request, send_from_directory
 from .config import Config
-from .extensions import db
+from .extensions import db, migrate
 from app.paths import ensure_app_dirs
 from app.version import __version__, APP_NAME
 
@@ -89,6 +89,8 @@ def create_app() -> Flask:
 
     # Inicializa extensões
     db.init_app(app)
+    migrate.init_app(app, db, render_as_batch=True)
+
 
     # Registra blueprints
     from .views.visitor_views import visitor_bp
@@ -121,25 +123,12 @@ def create_app() -> Flask:
     def favicon():
         return send_from_directory(app.root_path, 'icone.ico', mimetype='image/x-icon')
 
-
-
-
-    # Cria tabelas e executa migrações
-    with app.app_context():
-        from .models import visitor  # noqa: F401
-        from app.seed import seed_defaults
-        from app.utils.photo import migrate_photos_from_disk
-
-        # 1. Cria tabelas que não existem
-        db.create_all()
-
-        # 2. Adiciona colunas novas em bancos legados (ALTER TABLE)
-        _ensure_photo_columns()
-
-        # 3. Sincroniza defaults
-        seed_defaults()
-
-        # 4. Migração automática: fotos disco → banco
-        migrate_photos_from_disk()
+    # Importa todos os models para que SQLAlchemy/Alembic conheçam
+    # as tabelas durante geração/aplicação das migrations.
+    from . import models  # noqa: F401
 
     return app
+
+
+    return app
+

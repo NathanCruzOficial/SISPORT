@@ -3,7 +3,8 @@
 # Ponto de Entrada Unificado — Responsável por inicializar a aplicação
 # Sisport em dois modos: janela nativa (Webview) ou navegador padrão.
 # Gerencia logging, detecção de tecla SHIFT, alocação de console
-# Win32, servidor Flask em thread e verificação de atualizações.
+# Win32, servidor Flask em thread, verificação de atualizações e
+# atualização automática do banco de dados via Flask-Migrate/Alembic.
 #
 # Comportamento:
 #   • Padrão ................. abre em janela Webview (GUI nativo)
@@ -25,6 +26,9 @@ import sys
 import threading
 import time
 import webbrowser
+import shutil
+from datetime import datetime
+from pathlib import Path
 
 from app.paths import APP_DIR, ensure_app_dirs, log_path, icon_path
 
@@ -34,6 +38,7 @@ from app.paths import APP_DIR, ensure_app_dirs, log_path, icon_path
 # =====================================================================
 if platform.system() == "Windows":
     ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("com.sisport.app")
+
 
 # =====================================================================
 # Inicialização de Pastas
@@ -47,7 +52,6 @@ ensure_app_dirs()
 # =====================================================================
 # Variáveis Globais — Logging
 # =====================================================================
-
 
 # Caminho absoluto do arquivo de log da aplicação.
 LOG_FILE = log_path()
@@ -81,6 +85,25 @@ HOST = "127.0.0.1"
 PORT = 5000
 
 
+# =====================================================================
+# Variáveis Globais — Banco de Dados / Migrations
+# =====================================================================
+
+# Se você já tem usuários com bancos criados antes do Alembic,
+# gere primeiro uma migration "baseline schema".
+#
+# Depois de gerar essa migration, você pode colocar aqui o ID dela.
+#
+# Exemplo:
+#   LEGACY_BASELINE_REVISION = "a1b2c3d4e5f6"
+#
+# Se ficar como None, bancos legados serão marcados como "head".
+# Isso é aceitável somente na primeira versão com migrations.
+#
+# RECOMENDAÇÃO:
+# Depois que você criar novas migrations além da baseline, preencha
+# esta constante com o ID da migration baseline.
+LEGACY_BASELINE_REVISION = "71cb9dafd972"
 
 
 # =====================================================================
@@ -118,6 +141,7 @@ def _ensure_single_instance():
 
     log.info("Mutex adquirido — instância única confirmada.")
     return mutex
+
 
 # =====================================================================
 # Funções — Detecção de Tecla (SHIFT) e Modo de Execução
@@ -198,28 +222,265 @@ def _add_console_log_handler():
 
 
 # =====================================================================
+# Funções — Banco de Dados / Migrations
+# =====================================================================
+
+def _get_migrations_dir() -> str:
+    """
+    Localiza o diretório de migrations do Alembic.
+
+    Em desenvolvimento:
+        ./migrations
+
+    Em build PyInstaller:
+        tenta localizar migrations dentro de sys._MEIPASS, caso tenha
+        sido incluída no .spec.
+
+    :return: Caminho string para o diretório migrations.
+    """
+    if getattr(sys, "frozen", False):
+        base_dir = Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
+        bundled_migrations = base_dir / "migrations"
+
+        if bundled_migrations.exists():
+            return str(bundled_migrations)
+
+    project_migrations = Path(__file__).resolve().parent / "migrations"
+
+    if project_migrations.exists():
+        return str(project_migrations)
+
+    return "migrations"
+
+
+def _get_sqlite_database_path(app) -> Path | None:
+    """
+    Obtém o caminho físico do arquivo SQLite a partir da configuração
+    SQLALCHEMY_DATABASE_URI.
+
+    :param app: Instância Flask.
+    :return: Path do banco SQLite ou None se não for SQLite.
+    """
+    try:
+        from sqlalchemy.engine import make_url
+
+        uri = app.config.get("SQLALCHEMY_DATABASE_URI")
+
+        if not uri:
+            return None
+
+        url = make_url(uri)
+
+        if url.drivername != "sqlite":
+            return None
+
+        database = url.database
+
+        if not database or database == ":memory:":
+            return None
+
+        db_path = Path(database)
+
+        # Flask-SQLAlchemy 3.x trata caminhos relativos SQLite como
+        # relativos à pasta instance da aplicação.
+        if not db_path.is_absolute():
+            db_path = Path(app.instance_path) / db_path
+
+        return db_path.resolve()
+    except Exception as e:
+        log.warning(f"Não foi possível identificar o caminho do banco SQLite: {e}")
+        return None
+
+
+def fazer_backup_banco(caminho_banco: str | Path) -> Path | None:
+    """
+    Faz backup do arquivo SQLite antes de aplicar migrations.
+
+    :param caminho_banco: Caminho do arquivo de banco.
+    :return: Caminho do backup criado ou None se não houve backup.
+    """
+    origem = Path(caminho_banco)
+
+    if not origem.exists():
+        log.info("Banco ainda não existe. Backup não necessário.")
+        return None
+
+    pasta_backup = origem.parent / "backups"
+    pasta_backup.mkdir(parents=True, exist_ok=True)
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    destino = pasta_backup / f"{origem.stem}_backup_{timestamp}{origem.suffix}"
+
+    shutil.copy2(origem, destino)
+
+    log.info(f"Backup do banco criado em: {destino}")
+    return destino
+
+
+def _database_has_tables(db) -> bool:
+    """
+    Verifica se o banco possui tabelas.
+
+    :param db: Instância SQLAlchemy.
+    :return: True se houver tabelas, False caso contrário.
+    """
+    from sqlalchemy import inspect
+
+    inspector = inspect(db.engine)
+    tables = inspector.get_table_names()
+
+    # Ignora tabela interna do Alembic caso ela seja a única.
+    real_tables = [table for table in tables if table != "alembic_version"]
+
+    return len(real_tables) > 0
+
+
+def _database_has_alembic_version(db) -> bool:
+    """
+    Verifica se o banco já possui controle de versão do Alembic.
+
+    :param db: Instância SQLAlchemy.
+    :return: True se existir tabela alembic_version, False caso contrário.
+    """
+    from sqlalchemy import inspect
+
+    inspector = inspect(db.engine)
+    tables = inspector.get_table_names()
+
+    return "alembic_version" in tables
+
+
+def _stamp_legacy_database_if_needed(db, migrations_dir: str):
+    """
+    Bancos antigos criados com db.create_all() não possuem a tabela
+    alembic_version. Nesses casos, precisamos marcar o banco como estando
+    em uma revisão base para que as próximas migrations funcionem.
+
+    :param db: Instância SQLAlchemy.
+    :param migrations_dir: Diretório de migrations.
+    :return: None.
+    """
+    from flask_migrate import stamp
+
+    has_tables = _database_has_tables(db)
+    has_alembic = _database_has_alembic_version(db)
+
+    if not has_tables:
+        log.info("Banco vazio/novo detectado. Alembic criará a estrutura via upgrade.")
+        return
+
+    if has_alembic:
+        log.info("Banco já possui controle Alembic.")
+        return
+
+    revision = LEGACY_BASELINE_REVISION or "head"
+
+    log.warning(
+        "Banco legado detectado sem tabela alembic_version. "
+        f"Marcando banco como revisão Alembic: {revision}"
+    )
+
+    stamp(directory=migrations_dir, revision=revision)
+
+    log.info("Banco legado marcado com sucesso no Alembic.")
+
+
+def _run_post_migration_tasks():
+    """
+    Executa tarefas de dados que devem acontecer depois do upgrade
+    estrutural do banco.
+
+    Essas funções devem ser idempotentes, ou seja, seguras para rodar
+    várias vezes sem duplicar dados ou corromper informações.
+
+    :return: None.
+    """
+    try:
+        from app.seed import seed_defaults
+
+        log.info("Sincronizando dados padrão...")
+        seed_defaults()
+        log.info("Dados padrão sincronizados.")
+    except Exception as e:
+        log.warning(f"Falha ao executar seed_defaults(): {e}")
+
+    try:
+        from app.utils.photo import migrate_photos_from_disk
+
+        log.info("Verificando migração de fotos do disco para o banco...")
+        migrate_photos_from_disk()
+        log.info("Migração/verificação de fotos concluída.")
+    except Exception as e:
+        log.warning(f"Falha ao executar migrate_photos_from_disk(): {e}")
+
+
+def atualizar_banco(app):
+    """
+    Atualiza automaticamente o banco de dados usando Flask-Migrate/Alembic.
+
+    Fluxo:
+      1. Entra no app_context.
+      2. Faz backup do SQLite, se o arquivo existir.
+      3. Detecta banco legado sem alembic_version.
+      4. Marca banco legado com stamp, se necessário.
+      5. Aplica migrations pendentes com upgrade().
+      6. Executa tarefas pós-migration.
+
+    :param app: Instância Flask criada por create_app().
+    :return: None.
+    """
+    from app.extensions import db
+    from flask_migrate import upgrade
+
+    migrations_dir = _get_migrations_dir()
+
+    with app.app_context():
+        log.info("Iniciando verificação/atualização do banco de dados...")
+        log.info(f"Diretório de migrations: {migrations_dir}")
+
+        sqlite_path = _get_sqlite_database_path(app)
+
+        if sqlite_path:
+            fazer_backup_banco(sqlite_path)
+        else:
+            log.info("Banco não é SQLite ou caminho não identificado. Backup automático ignorado.")
+
+        _stamp_legacy_database_if_needed(db, migrations_dir)
+
+        log.info("Aplicando migrations pendentes...")
+        upgrade(directory=migrations_dir)
+        log.info("Migrations aplicadas com sucesso.")
+
+        _run_post_migration_tasks()
+
+        log.info("Banco de dados atualizado com sucesso.")
+
+
+# =====================================================================
 # Funções — Servidor Flask (Thread e Polling)
 # =====================================================================
 
-def _wait_for_server(host: str, port: int, timeout: float = 15.0) -> bool:
+def _wait_for_server(host: str, port: int, timeout: float = 60.0) -> bool:
     """
     Aguarda o servidor Flask ficar pronto fazendo polling via conexão
     TCP. Mais confiável que um sleep fixo.
 
     :param host:    (str)   Endereço do servidor.
     :param port:    (int)   Porta do servidor.
-    :param timeout: (float) Tempo máximo de espera em segundos (padrão: 15s).
+    :param timeout: (float) Tempo máximo de espera em segundos.
     :return: (bool) True se o servidor respondeu, False se deu timeout.
     """
     import socket
 
     deadline = time.monotonic() + timeout
+
     while time.monotonic() < deadline:
         try:
             with socket.create_connection((host, port), timeout=0.5):
                 return True
         except OSError:
             time.sleep(0.15)
+
     return False
 
 
@@ -228,13 +489,29 @@ def _run_flask():
     Cria e inicia a aplicação Flask. Projetada para rodar dentro de
     uma thread daemon, sem reloader e sem modo debug.
 
+    Antes de iniciar o servidor, aplica automaticamente as migrations
+    pendentes do banco de dados.
+
     :return: None.
     """
     from app import create_app
 
     app = create_app()
+
+    try:
+        atualizar_banco(app)
+    except Exception as e:
+        log.exception(f"Falha crítica ao atualizar banco de dados: {e}")
+        raise
+
     log.info(f"Flask iniciando em http://{HOST}:{PORT}")
-    app.run(host=HOST, port=PORT, debug=False, use_reloader=False)
+
+    app.run(
+        host=HOST,
+        port=PORT,
+        debug=False,
+        use_reloader=False,
+    )
 
 
 def _start_server_thread() -> threading.Thread:
@@ -282,8 +559,9 @@ def _run_webview_mode():
         resizable=True,
         fullscreen=True,
     )
+
     webview.start(
-        icon=icon_path(),  # ← ícone na taskbar e na janela
+        icon=icon_path(),
     )
 
     log.info("Janela Webview fechada. Encerrando.")
@@ -365,7 +643,7 @@ def main():
     log.info(f"Dados em: {APP_DIR}")
     log.info(f"Log em:   {LOG_FILE}")
 
-    # ── Garante instância única ──
+    # Garante instância única.
     _mutex = _ensure_single_instance()
 
     browser_mode = _should_use_browser()
