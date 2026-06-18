@@ -24,7 +24,13 @@
              {{ 'checked' if settings.visitor_empresa_required }}>
       <label class="form-check-label" for="empresaReq">Empresa</label>
     </div>
+    <div class="form-check">
+      <input type="checkbox" name="visit_reason_required" class="form-check-input" id="reasonReq"
+      {{ 'checked' if settings.visitor_visit_reason_required }}>
+      <label class="form-check-label" for="reasonReq">Motivo da Visitação</label>
+    </div>
   </div>
+</div>
 
   <div class="mt-3 text-end">
     <button type="submit" class="btn btn-primary btn-sm">

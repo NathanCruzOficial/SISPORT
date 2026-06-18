@@ -35,6 +35,9 @@ from ..controllers.visitor_controller import (
     visitor_photo_update,
     _check_duplicate_fields,
 )
+from ..models.visitor_destination import VisitorDestinationGroup, VisitorDestinationPlace
+from ..models.settings import get_setting
+
 from ..utils.validators import normalize_cpf, is_valid_cpf, validate_required_email
 from sqlalchemy.exc import IntegrityError
 
@@ -67,6 +70,102 @@ def inject_photo_helper():
         ) + f"?t={int(time())}"
 
     return {"photo_url": photo_url}
+
+# =====================================================================
+# Helpers — Destinos de visita
+# =====================================================================
+
+def _visit_reason_required() -> bool:
+    """
+    Retorna se o motivo da visita é obrigatório conforme configurações.
+    """
+    return str(get_setting("visitor_visit_reason_required", "0")) == "1"
+
+
+def _build_destination_tree():
+    """
+    Monta uma árvore com grupos e locais ativos para seleção rápida no check-in.
+
+    Retorno:
+    [
+        {
+            "id": 1,
+            "name": "Raiz",
+            "color": "#ffc107",
+            "is_root": True,
+            "places": [...],
+            "children": [...]
+        }
+    ]
+    """
+    root = VisitorDestinationGroup.query.filter_by(is_root=True).first()
+
+    if not root:
+        return []
+
+    def build_group(group):
+        places = (
+            VisitorDestinationPlace.query
+            .filter_by(group_id=group.id, is_active=True)
+            .order_by(
+                VisitorDestinationPlace.sort_order.asc(),
+                VisitorDestinationPlace.name.asc(),
+            )
+            .all()
+        )
+
+        children = (
+            VisitorDestinationGroup.query
+            .filter_by(parent_id=group.id)
+            .order_by(
+                VisitorDestinationGroup.sort_order.asc(),
+                VisitorDestinationGroup.name.asc(),
+            )
+            .all()
+        )
+
+        return {
+            "id": group.id,
+            "name": group.name,
+            "color": group.color or "#198754",
+            "is_root": group.is_root,
+            "places": places,
+            "children": [build_group(child) for child in children],
+        }
+
+    return [build_group(root)]
+
+
+def _get_selected_destination_from_form():
+    """
+    Lê o local selecionado no formulário e retorna o nome do destino.
+    """
+    place_id = request.form.get("destination_place_id", type=int)
+
+    if not place_id:
+        raise ValueError("Selecione o local/destino da visita.")
+
+    place = VisitorDestinationPlace.query.filter_by(
+        id=place_id,
+        is_active=True,
+    ).first()
+
+    if not place:
+        raise ValueError("Local/destino inválido ou inativo.")
+
+    return place.name
+
+
+def _get_reason_from_form():
+    """
+    Lê o motivo da visita e valida conforme configuração.
+    """
+    reason = (request.form.get("reason") or "").strip()
+
+    if _visit_reason_required() and not reason:
+        raise ValueError("Informe o motivo da visita.")
+
+    return reason
 
 
 # =====================================================================
@@ -136,20 +235,34 @@ def checkin_form(visitor_id: int):
     Exibe formulário de check-in ou registra a entrada.
     """
     visitor = db.session.get(Visitor, visitor_id)
+
     if not visitor:
         flash("Visitante não encontrado.", "danger")
         return redirect(url_for("visitor.identify"))
 
     if request.method == "POST":
         try:
-            destination = request.form.get("destination", "")
-            visit_id = register_checkin(visitor, destination)
+            destination = _get_selected_destination_from_form()
+            reason = _get_reason_from_form()
+
+            visit_id = register_checkin(
+                visitor=visitor,
+                destination=destination,
+                reason=reason,
+            )
+
             flash(f"Entrada registrada (visita {visit_id}).", "success")
             return redirect(url_for("visitor.identify"))
+
         except Exception as e:
             flash(str(e), "danger")
 
-    return render_template("checkin_existing.html", visitor=visitor)
+    return render_template(
+        "checkin_existing.html",
+        visitor=visitor,
+        destination_tree=_build_destination_tree(),
+        visit_reason_required=_visit_reason_required(),
+    )
 
 
 @visitor_bp.route("/checkout/<int:visit_id>", methods=["POST"])
@@ -176,7 +289,14 @@ def wizard():
     """
     if "wizard" not in session:
         wizard_start_for_new_visitor()
-    return render_template("visitor_wizard.html", wizard=session["wizard"])
+
+    return render_template(
+        "visitor_wizard.html",
+        wizard=session["wizard"],
+        destination_tree=_build_destination_tree(),
+        visit_reason_required=_visit_reason_required(),
+    )
+
 
 
 @visitor_bp.route("/wizard/step1", methods=["POST"])
@@ -234,20 +354,27 @@ def wizard_finish():
     """
     try:
         visitor = create_visitor_if_not_exists_from_wizard()
-        destination = request.form.get("destination", "").strip()
 
-        if destination:
-            register_checkin(visitor, destination)
-            flash("Visitante cadastrado e check-in registrado!", "success")
-        else:
-            flash("Visitante cadastrado com sucesso!", "success")
+        destination = _get_selected_destination_from_form()
+        reason = _get_reason_from_form()
+
+        register_checkin(
+            visitor=visitor,
+            destination=destination,
+            reason=reason,
+        )
+
+        flash("Visitante cadastrado e check-in registrado!", "success")
 
         session.pop("wizard", None)
+
         return redirect(url_for("visitor.identify"))
 
     except Exception as e:
         flash(str(e), "danger")
         return redirect(url_for("visitor.wizard"))
+
+
 
 
 # =====================================================================

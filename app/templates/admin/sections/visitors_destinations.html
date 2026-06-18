@@ -1,0 +1,99 @@
+<div class="card border-0 shadow-sm">
+  <div class="card-header bg-white d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
+    <div>
+      <h5 class="mb-1">
+        <i class="bi bi-folder2-open text-warning me-2"></i>
+        Grupos e Locais de Visitação
+      </h5>
+      <div class="text-muted small">
+        Gerencie categorias/grupos e locais visitáveis.
+      </div>
+    </div>
+
+    <a href="{{ url_for('admin.visitor_destinations_root') }}"
+       class="btn btn-primary">
+      <i class="bi bi-diagram-3 me-1"></i>
+      Gerenciar grupos e locais
+    </a>
+  </div>
+
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Grupo/Categoria</th>
+            <th style="width: 180px;">Locais</th>
+            <th style="width: 180px;">Subgrupos</th>
+            <th style="width: 120px;">Cor</th>
+            <th class="text-end" style="width: 180px;">Ações</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {% if visitor_groups_flat %}
+            {% for group in visitor_groups_flat %}
+              <tr>
+                <td>
+                  <div class="fw-semibold" style="padding-left: {{ group.depth * 22 }}px;">
+                    {% if group.is_root %}
+                      <i class="bi bi-house-door-fill text-warning me-1"></i>
+                    {% else %}
+                      <i class="bi bi-folder-fill me-1" style="color: {{ group.color }};"></i>
+                    {% endif %}
+
+                    {{ group.name }}
+
+                    {% if group.is_root %}
+                      <span class="badge bg-warning text-dark ms-2">
+                        Raiz
+                      </span>
+                    {% endif %}
+                  </div>
+
+                  <div class="small text-muted" style="padding-left: {{ group.depth * 22 }}px;">
+                    {{ group.path }}
+                  </div>
+                </td>
+
+                <td>
+                  <span class="badge bg-success">
+                    {{ group.total_places_count() }} local(is)
+                  </span>
+                </td>
+
+                <td>
+                  <span class="badge bg-secondary">
+                    {{ group.total_groups_count() }} grupo(s)
+                  </span>
+                </td>
+
+                <td>
+                  <span class="badge"
+                        style="background-color: {{ group.color }}; color: #111;">
+                    {{ group.color }}
+                  </span>
+                </td>
+
+                <td class="text-end">
+                  <a href="{{ url_for('admin.visitor_destinations_group', group_id=group.id) }}"
+                     class="btn btn-sm btn-outline-primary">
+                    <i class="bi bi-pencil-square me-1"></i>
+                    Gerenciar
+                  </a>
+                </td>
+              </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="5" class="text-center text-muted py-5">
+                <i class="bi bi-folder2-open fs-1 d-block mb-2"></i>
+                Nenhum grupo encontrado.
+              </td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>

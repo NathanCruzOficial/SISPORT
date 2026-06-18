@@ -1,0 +1,680 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+  <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
+    <div>
+      <h1 class="h4 mb-1">
+        <i class="bi bi-folder2-open text-warning me-2"></i>
+        Gerenciar Grupo
+      </h1>
+
+      <div class="text-muted">
+        {{ current_group.path }}
+      </div>
+    </div>
+
+    <div class="d-flex flex-wrap gap-2">
+      <a href="{{ url_for('admin.visitor_destinations_root') }}"
+         class="btn btn-outline-secondary">
+        <i class="bi bi-house-door me-1"></i>
+        Raiz
+      </a>
+
+      {% if current_group.parent_id %}
+        <a href="{{ url_for('admin.visitor_destinations_group', group_id=current_group.parent_id) }}"
+           class="btn btn-outline-secondary">
+          <i class="bi bi-arrow-left me-1"></i>
+          Voltar
+        </a>
+      {% endif %}
+
+      <button class="btn btn-outline-warning"
+              data-bs-toggle="modal"
+              data-bs-target="#modalCreateGroup">
+        <i class="bi bi-folder-plus me-1"></i>
+        Novo grupo
+      </button>
+
+      <button class="btn btn-success"
+              data-bs-toggle="modal"
+              data-bs-target="#modalCreatePlace">
+        <i class="bi bi-geo-alt-fill me-1"></i>
+        Novo local
+      </button>
+    </div>
+  </div>
+
+  <nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb bg-light border rounded px-3 py-2 mb-0">
+      {% for name in current_group.path_names %}
+        {% if loop.last %}
+          <li class="breadcrumb-item active" aria-current="page">
+            {{ name }}
+          </li>
+        {% else %}
+          <li class="breadcrumb-item">
+            {{ name }}
+          </li>
+        {% endif %}
+      {% endfor %}
+    </ol>
+  </nav>
+
+  <div class="row g-3">
+
+    <div class="col-12 col-xl-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header bg-white">
+          <strong>
+            <i class="bi bi-diagram-3 text-primary me-1"></i>
+            Categorias
+          </strong>
+        </div>
+
+        <div class="list-group list-group-flush">
+          {% for group in groups_flat %}
+            <a href="{{ url_for('admin.visitor_destinations_group', group_id=group.id) }}"
+               class="list-group-item list-group-item-action {% if group.id == current_group.id %}active{% endif %}"
+               style="padding-left: {{ 16 + (group.depth * 18) }}px;">
+              {% if group.is_root %}
+                <i class="bi bi-house-door-fill me-1"></i>
+              {% else %}
+                <i class="bi bi-folder-fill me-1" style="color: {{ group.color }};"></i>
+              {% endif %}
+
+              {{ group.name }}
+            </a>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-xl-9">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
+          <div>
+            <div class="d-flex align-items-center gap-2">
+              <strong>
+                {{ current_group.name }}
+              </strong>
+
+              <span class="badge"
+                    style="background-color: {{ current_group.color }}; color: #111;">
+                {{ current_group.color }}
+              </span>
+
+              {% if current_group.is_root %}
+                <span class="badge bg-warning text-dark">
+                  Grupo raiz
+                </span>
+              {% endif %}
+            </div>
+
+            <div class="small text-muted">
+              {{ children_items|length }} item(ns) direto(s) nesta categoria.
+            </div>
+          </div>
+
+          <button class="btn btn-sm btn-outline-secondary"
+                  data-bs-toggle="modal"
+                  data-bs-target="#modalEditCurrentGroup">
+            <i class="bi bi-pencil me-1"></i>
+            Editar categoria atual
+          </button>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th style="width: 50px;"></th>
+                <th style="width: 90px;">Tipo</th>
+                <th>Nome</th>
+                <th style="width: 160px;">Status</th>
+                <th style="width: 120px;">Cor</th>
+                <th class="text-end" style="width: 360px;">Ações</th>
+              </tr>
+            </thead>
+
+            <tbody id="destinationItemsSortable"
+                   data-group-id="{{ current_group.id }}">
+
+              {% if children_items %}
+                {% for item in children_items %}
+                  {% set obj = item.object %}
+
+                  <tr data-type="{{ item.kind }}"
+                      data-id="{{ item.id }}">
+
+                    <td class="text-muted drag-handle" style="cursor: grab;">
+                      <i class="bi bi-grip-vertical"></i>
+                    </td>
+
+                    <td>
+                      {% if item.kind == "group" %}
+                        <i class="bi bi-folder-fill fs-5" style="color: {{ obj.color }};"></i>
+                      {% else %}
+                        <i class="bi bi-geo-alt-fill text-success fs-5"></i>
+                      {% endif %}
+                    </td>
+
+                    <td>
+                      <div class="fw-semibold">
+                        {{ obj.name }}
+                      </div>
+
+                      <div class="small text-muted">
+                        {% if item.kind == "group" %}
+                          {{ obj.total_places_count() }} local(is) dentro
+                        {% else %}
+                          {{ obj.path }}
+                        {% endif %}
+                      </div>
+                    </td>
+
+                    <td>
+                      {% if item.kind == "group" %}
+                        <span class="badge bg-primary">
+                          Categoria
+                        </span>
+                      {% elif obj.is_active %}
+                        <span class="badge bg-success">
+                          Ativo
+                        </span>
+                      {% else %}
+                        <span class="badge bg-secondary">
+                          Inativo
+                        </span>
+                      {% endif %}
+                    </td>
+
+                    <td>
+                      <span class="badge"
+                            style="background-color: {{ item.color }}; color: #111;">
+                        {{ item.color }}
+                      </span>
+                    </td>
+
+                    <td class="text-end">
+                      {% if item.kind == "group" %}
+                        <a href="{{ url_for('admin.visitor_destinations_group', group_id=obj.id) }}"
+                           class="btn btn-sm btn-outline-primary">
+                          <i class="bi bi-folder2-open me-1"></i>
+                          Abrir
+                        </a>
+
+                        <button class="btn btn-sm btn-outline-secondary"
+                                data-bs-toggle="modal"
+                                data-bs-target="#modalEditGroup{{ obj.id }}">
+                          <i class="bi bi-pencil me-1"></i>
+                          Editar
+                        </button>
+
+                        {% if not obj.is_root %}
+                          <form method="post"
+                                action="{{ url_for('admin.delete_visitor_destination_group', group_id=obj.id) }}"
+                                class="d-inline"
+                                onsubmit="return confirm('Tem certeza? Isso apagará este grupo, subgrupos e todos os locais internos.');">
+                            <button class="btn btn-sm btn-outline-danger">
+                              <i class="bi bi-trash me-1"></i>
+                              Apagar
+                            </button>
+                          </form>
+                        {% endif %}
+                      {% else %}
+                        <button class="btn btn-sm btn-outline-secondary"
+                                data-bs-toggle="modal"
+                                data-bs-target="#modalEditPlace{{ obj.id }}">
+                          <i class="bi bi-pencil me-1"></i>
+                          Editar
+                        </button>
+
+                        <form method="post"
+                              action="{{ url_for('admin.toggle_visitor_destination_place', place_id=obj.id) }}"
+                              class="d-inline">
+                          {% if obj.is_active %}
+                            <button class="btn btn-sm btn-outline-warning">
+                              Inativar
+                            </button>
+                          {% else %}
+                            <button class="btn btn-sm btn-outline-success">
+                              Ativar
+                            </button>
+                          {% endif %}
+                        </form>
+
+                        <form method="post"
+                              action="{{ url_for('admin.delete_visitor_destination_place', place_id=obj.id) }}"
+                              class="d-inline"
+                              onsubmit="return confirm('Tem certeza que deseja apagar este local?');">
+                          <button class="btn btn-sm btn-outline-danger">
+                            <i class="bi bi-trash me-1"></i>
+                            Apagar
+                          </button>
+                        </form>
+                      {% endif %}
+                    </td>
+                  </tr>
+                {% endfor %}
+              {% else %}
+                <tr>
+                  <td colspan="6" class="text-center text-muted py-5">
+                    <i class="bi bi-folder2-open fs-1 d-block mb-2"></i>
+                    Esta categoria está vazia.
+                  </td>
+                </tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+
+<div class="modal fade" id="modalCreateGroup" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <form method="post"
+          action="{{ url_for('admin.create_visitor_destination_group') }}"
+          class="modal-content">
+
+      <input type="hidden" name="parent_id" value="{{ current_group.id }}">
+
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="bi bi-folder-plus text-warning me-2"></i>
+          Novo grupo/categoria
+        </h5>
+
+        <button type="button"
+                class="btn-close"
+                data-bs-dismiss="modal">
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <div class="alert alert-light border small">
+          O grupo será criado dentro de:
+          <strong>{{ current_group.name }}</strong>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Nome</label>
+          <input type="text"
+                 name="name"
+                 class="form-control"
+                 placeholder="Ex: Pátio 1, Estado Maior, Administração"
+                 required>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Cor do grupo</label>
+          <input type="color"
+                 name="color"
+                 class="form-control form-control-color"
+                 value="{{ current_group.color }}"
+                 title="Escolha uma cor">
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button"
+                class="btn btn-outline-secondary"
+                data-bs-dismiss="modal">
+          Cancelar
+        </button>
+
+        <button class="btn btn-warning">
+          Criar grupo
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+
+<div class="modal fade" id="modalCreatePlace" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <form method="post"
+          action="{{ url_for('admin.create_visitor_destination_place') }}"
+          class="modal-content">
+
+      <input type="hidden" name="group_id" value="{{ current_group.id }}">
+
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="bi bi-geo-alt-fill text-success me-2"></i>
+          Novo local
+        </h5>
+
+        <button type="button"
+                class="btn-close"
+                data-bs-dismiss="modal">
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <div class="alert alert-light border small">
+          O local será criado dentro de:
+          <strong>{{ current_group.name }}</strong>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Nome do local</label>
+          <input type="text"
+                 name="name"
+                 class="form-control"
+                 placeholder="Ex: Secretaria, Sala 3, Almoxarifado"
+                 required>
+        </div>
+
+        <div class="form-check form-switch">
+          <input class="form-check-input"
+                 type="checkbox"
+                 role="switch"
+                 name="is_active"
+                 value="1"
+                 id="newPlaceActive"
+                 checked>
+
+          <label class="form-check-label" for="newPlaceActive">
+            Local ativo para visitação
+          </label>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button"
+                class="btn btn-outline-secondary"
+                data-bs-dismiss="modal">
+          Cancelar
+        </button>
+
+        <button class="btn btn-success">
+          Criar local
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+
+<div class="modal fade" id="modalEditCurrentGroup" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <form method="post"
+          action="{{ url_for('admin.edit_visitor_destination_group', group_id=current_group.id) }}"
+          class="modal-content">
+
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="bi bi-folder-fill text-warning me-2"></i>
+          Editar categoria atual
+        </h5>
+
+        <button type="button"
+                class="btn-close"
+                data-bs-dismiss="modal">
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Nome</label>
+          <input type="text"
+                 name="name"
+                 class="form-control"
+                 value="{{ current_group.name }}"
+                 required>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Cor</label>
+          <input type="color"
+                 name="color"
+                 class="form-control form-control-color"
+                 value="{{ current_group.color }}">
+        </div>
+
+        {% if not current_group.is_root %}
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Grupo pai</label>
+            <select name="parent_id" class="form-select">
+              {% for group in groups_flat %}
+                {% if group.id != current_group.id %}
+                  <option value="{{ group.id }}"
+                          {% if current_group.parent_id == group.id %}selected{% endif %}>
+                    {{ '— ' * group.depth }}{{ group.name }}
+                  </option>
+                {% endif %}
+              {% endfor %}
+            </select>
+          </div>
+        {% else %}
+          <div class="alert alert-light border small mb-0">
+            O grupo raiz não pode ser movido ou deletado.
+          </div>
+        {% endif %}
+      </div>
+
+      <div class="modal-footer">
+        <button type="button"
+                class="btn btn-outline-secondary"
+                data-bs-dismiss="modal">
+          Cancelar
+        </button>
+
+        <button class="btn btn-primary">
+          Salvar
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+
+{% for item in children_items %}
+  {% set obj = item.object %}
+
+  {% if item.kind == "group" %}
+    <div class="modal fade" id="modalEditGroup{{ obj.id }}" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog">
+        <form method="post"
+              action="{{ url_for('admin.edit_visitor_destination_group', group_id=obj.id) }}"
+              class="modal-content">
+
+          <div class="modal-header">
+            <h5 class="modal-title">
+              <i class="bi bi-folder-fill text-warning me-2"></i>
+              Editar grupo
+            </h5>
+
+            <button type="button"
+                    class="btn-close"
+                    data-bs-dismiss="modal">
+            </button>
+          </div>
+
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Nome</label>
+              <input type="text"
+                     name="name"
+                     class="form-control"
+                     value="{{ obj.name }}"
+                     required>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Cor</label>
+              <input type="color"
+                     name="color"
+                     class="form-control form-control-color"
+                     value="{{ obj.color }}">
+            </div>
+
+            {% if not obj.is_root %}
+              <div class="mb-3">
+                <label class="form-label fw-semibold">Grupo pai</label>
+                <select name="parent_id" class="form-select">
+                  {% for group in groups_flat %}
+                    {% if group.id != obj.id %}
+                      <option value="{{ group.id }}"
+                              {% if obj.parent_id == group.id %}selected{% endif %}>
+                        {{ '— ' * group.depth }}{{ group.name }}
+                      </option>
+                    {% endif %}
+                  {% endfor %}
+                </select>
+              </div>
+            {% endif %}
+          </div>
+
+          <div class="modal-footer">
+            <button type="button"
+                    class="btn btn-outline-secondary"
+                    data-bs-dismiss="modal">
+              Cancelar
+            </button>
+
+            <button class="btn btn-primary">
+              Salvar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  {% else %}
+    <div class="modal fade" id="modalEditPlace{{ obj.id }}" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog">
+        <form method="post"
+              action="{{ url_for('admin.edit_visitor_destination_place', place_id=obj.id) }}"
+              class="modal-content">
+
+          <div class="modal-header">
+            <h5 class="modal-title">
+              <i class="bi bi-geo-alt-fill text-success me-2"></i>
+              Editar local
+            </h5>
+
+            <button type="button"
+                    class="btn-close"
+                    data-bs-dismiss="modal">
+            </button>
+          </div>
+
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Nome</label>
+              <input type="text"
+                     name="name"
+                     class="form-control"
+                     value="{{ obj.name }}"
+                     required>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Grupo/categoria</label>
+              <select name="group_id" class="form-select">
+                {% for group in groups_flat %}
+                  <option value="{{ group.id }}"
+                          {% if obj.group_id == group.id %}selected{% endif %}>
+                    {{ '— ' * group.depth }}{{ group.name }}
+                  </option>
+                {% endfor %}
+              </select>
+
+              <div class="form-text">
+                Ao trocar o grupo, o local herdará a cor do novo grupo.
+              </div>
+            </div>
+
+            <div class="form-check form-switch">
+              <input class="form-check-input"
+                     type="checkbox"
+                     role="switch"
+                     name="is_active"
+                     value="1"
+                     id="placeActive{{ obj.id }}"
+                     {% if obj.is_active %}checked{% endif %}>
+
+              <label class="form-check-label" for="placeActive{{ obj.id }}">
+                Local ativo para visitação
+              </label>
+            </div>
+          </div>
+
+          <div class="modal-footer">
+            <button type="button"
+                    class="btn btn-outline-secondary"
+                    data-bs-dismiss="modal">
+              Cancelar
+            </button>
+
+            <button class="btn btn-primary">
+              Salvar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  {% endif %}
+{% endfor %}
+
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const sortableBody = document.getElementById("destinationItemsSortable");
+
+  if (!sortableBody) {
+    return;
+  }
+
+  new Sortable(sortableBody, {
+    handle: ".drag-handle",
+    animation: 150,
+    ghostClass: "table-warning",
+
+    onEnd: function () {
+      const items = Array.from(
+        sortableBody.querySelectorAll("tr[data-type][data-id]")
+      ).map(function (row) {
+        return {
+          type: row.dataset.type,
+          id: Number(row.dataset.id)
+        };
+      });
+
+      fetch("{{ url_for('admin.reorder_visitor_destinations') }}", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          group_id: Number(sortableBody.dataset.groupId),
+          items: items
+        })
+      })
+      .then(function (response) {
+        return response.json();
+      })
+      .then(function (data) {
+        if (!data.success) {
+          alert(data.message || "Erro ao reordenar itens.");
+        }
+      })
+      .catch(function () {
+        alert("Erro ao reordenar itens.");
+      });
+    }
+  });
+});
+</script>
+{% endblock %}

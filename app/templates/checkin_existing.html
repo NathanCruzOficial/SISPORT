@@ -200,22 +200,41 @@
           <div class="muted small">Registrar entrada</div>
         </div>
 
-        <form method="post" action="{{ url_for('visitor.checkin_form', visitor_id=visitor.id) }}">
-          <div class="row g-3 align-items-end">
-            <div class="col-12 col-md-8">
-              <label class="form-label">Para onde o visitante vai?</label>
-              <input class="form-control form-control-lg"
-                     name="destination"
-                     placeholder="Ex: Seção / Sala / Responsável"
-                     required autofocus>
-            </div>
-            <div class="col-12 col-md-4">
-              <button class="btn btn-success btn-lg w-100 py-3" type="submit">
-                <i class="bi bi-check-lg me-1"></i>Registrar visita
-              </button>
-            </div>
+        <form method="post"
+            action="{{ url_for('visitor.checkin_form', visitor_id=visitor.id) }}"
+            data-requires-destination="1">
+
+        <div class="mb-4">
+          {% include "components/destination_selector.html" %}
+        </div>
+
+        <div class="row g-3 align-items-end">
+          <div class="col-12 col-md-8">
+            <label class="form-label">
+              Motivo da visita
+              {% if visit_reason_required %}
+                <span class="text-danger">*</span>
+              {% else %}
+                <span class="text-muted small">(opcional)</span>
+              {% endif %}
+            </label>
+
+            <textarea class="form-control form-control-lg"
+                      name="reason"
+                      rows="2"
+                      {% if visit_reason_required %}required{% endif %}
+                      placeholder="Ex: Reunião, entrega, manutenção, atendimento..."></textarea>
           </div>
-        </form>
+
+          <div class="col-12 col-md-4">
+            <button class="btn btn-success btn-lg w-100 py-3" type="submit">
+              <i class="bi bi-check-lg me-1"></i>Registrar visita
+            </button>
+          </div>
+        </div>
+      </form>
+
+
       </div>
     {% endif %}
 

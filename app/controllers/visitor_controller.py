@@ -292,18 +292,34 @@ def visitor_photo_update(visitor, photo_data_url):
 # Funções — Check-in / Check-out de Visitas
 # =====================================================================
 
-def register_checkin(visitor: Visitor, destination: str) -> int:
+def register_checkin(visitor: Visitor, destination: str, reason: str = "") -> int:
     """
-    Registra uma nova entrada (check-in) para um visitante.
+    Registra uma nova entrada/check-in para um visitante.
+
+    destination:
+        Local selecionado na árvore de destinos.
+
+    reason:
+        Motivo da visita. Pode ser obrigatório ou opcional conforme configuração.
     """
     destination = (destination or "").strip()
-    if not destination:
-        raise ValueError("Informe o local/destino da visita.")
+    reason = (reason or "").strip()
 
-    visit = Visit(visitor_id=visitor.id, destination=destination, check_in=datetime.now())
+    if not destination:
+        raise ValueError("Selecione o local/destino da visita.")
+
+    visit = Visit(
+        visitor_id=visitor.id,
+        destination=destination,
+        reason=reason,
+        check_in=datetime.now(),
+    )
+
     db.session.add(visit)
     db.session.commit()
+
     return visit.id
+
 
 
 def checkout_visit(visit_id: int):

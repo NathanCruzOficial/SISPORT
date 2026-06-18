@@ -58,12 +58,19 @@ SETTINGS_TABS = [
                 "template": "admin/sections/visitors_categories.html",
             },
             {
+                "key": "Destinos",
+                "label": "Zonas de Acesso",
+                "icon": "bi-tags",
+                "template": "admin/sections/visitors_destinations.html",
+            },
+            {
                 "key": "Registro",
                 "label": "Dados de registro",
                 "icon": "bi-people",
                 "template": "admin/sections/visitors_fields.html",
             },
         ],
+        
     },
 
     # ── Aba: Banco de Dados ─────────────────────────────────────────

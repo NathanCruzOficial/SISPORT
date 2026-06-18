@@ -109,7 +109,10 @@ class Visit(db.Model):
     visitor    = db.relationship("Visitor", back_populates="visits")
 
     # ── Dados da Visita ──────────────────────────────────────────────
-    destination = db.Column(db.String(180), nullable=False)
+    destination = db.Column(db.String(255), nullable=False)
+    
+    # Novo campo: motivo da visita
+    reason = db.Column(db.Text, nullable=True)
 
     # ── Controle de Entrada/Saída ────────────────────────────────────
     check_in  = db.Column(db.DateTime, default=datetime.now, nullable=False)

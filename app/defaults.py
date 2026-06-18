@@ -31,7 +31,8 @@ DEFAULTS: dict[str, tuple[str, str]] = {
 
     # ── Visitantes ──────────────────────────────────────────────
     "visitor_categories":               ("civil,militar,ex-militar,prestador", "list"),
-    "visitor_father_name_required":     ("0", "bool"),   # ← NOVO
+    "visitor_father_name_required":     ("0", "bool"),    # ← NOVO
+    "visitor_visit_reason_required":    ("0", "bool"),    # ← NOVO
     "visitor_email_required":           ("0", "bool"),    # ← NOVO
     "visitor_empresa_required":         ("0", "bool"),    # ← NOVO
 
