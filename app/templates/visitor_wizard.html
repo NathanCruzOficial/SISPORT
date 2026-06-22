@@ -1,33 +1,6 @@
 <!-- =================================================================
   templates/visitor_wizard.html
-  Wizard de Cadastro de Visitante — Formulário guiado em 3 etapas
-  para o cadastro completo de um novo visitante no SISPORT.
-
-  Etapas:
-    1. Identificação — Dados pessoais (nome, CPF, filiação, contato)
-    2. Foto          — Captura de foto via webcam (ou pular)
-    3. Local/Destino — Setor/pessoa que o visitante irá visitar +
-                       registro automático do check-in
-
-  Variáveis de contexto esperadas:
-    wizard.step        (int)  — Etapa atual (1, 2 ou 3)
-    wizard.name        (str)  — Nome completo (preenchido etapa 1)
-    wizard.cpf         (str)  — CPF do visitante
-    wizard.mom_name    (str)  — Nome da mãe
-    wizard.father_name (str)  — Nome do pai (opcional)
-    wizard.phone       (str)  — Celular
-    wizard.email       (str)  — E-mail (opcional)
-    wizard.empresa     (str)  — Vínculo empresarial (opcional)
-
-  Rotas utilizadas (POST):
-    visitor.wizard_step1  — Processa etapa 1 → avança para 2
-    visitor.wizard_step2  — Processa etapa 2 (foto) → avança para 3
-    visitor.wizard_finish — Processa etapa 3 → finaliza cadastro +
-                            registra check-in da visita
-
-  Extends: base.html
-  Blocos: content, scripts
-  Assets: static/js/camera.js (controle da webcam na etapa 2)
+  Wizard de Cadastro de Visitante — Formulário guiado em 3 etapas.
 ================================================================= -->
 
 {% extends "base.html" %}
@@ -96,28 +69,28 @@
 
             <div class="col-12 col-md-4">
               <label class="form-label">Categoria <span class="text-danger">*</span></label>
+
+              {% set cat = wizard.category|default('civil') %}
+
               <div class="d-flex flex-wrap gap-2 pt-1">
-                {% set cat = wizard.category|default('civil') %}
+                {% for category in visitor_categories %}
+                  <input type="radio"
+                        class="btn-check"
+                        name="category"
+                        id="cat-{{ category.value }}"
+                        value="{{ category.value }}"
+                        {% if cat == category.value %}checked{% elif loop.first %}checked{% endif %}
+                        autocomplete="off">
 
-                <input type="radio" class="btn-check" name="category" id="cat-civil"
-                       value="civil" {% if cat == 'civil' %}checked{% endif %} autocomplete="off">
-                <label class="btn btn-outline-secondary btn-sm px-3" for="cat-civil">
-                  <i class="bi bi-person me-1"></i>Civil
-                </label>
-
-                <input type="radio" class="btn-check" name="category" id="cat-militar"
-                       value="militar" {% if cat == 'militar' %}checked{% endif %} autocomplete="off">
-                <label class="btn btn-outline-success btn-sm px-3" for="cat-militar">
-                  <i class="bi bi-shield-fill me-1"></i>Militar
-                </label>
-
-                <input type="radio" class="btn-check" name="category" id="cat-ex"
-                       value="ex-militar" {% if cat == 'ex-militar' %}checked{% endif %} autocomplete="off">
-                <label class="btn btn-outline-warning btn-sm px-3" for="cat-ex">
-                  <i class="bi bi-shield me-1"></i>Ex-Militar
-                </label>
+                  <label class="btn {{ category.btn_class }} btn-sm px-3"
+                        for="cat-{{ category.value }}">
+                    <i class="bi {{ category.icon }} me-1"></i>
+                    {{ category.label }}
+                  </label>
+                {% endfor %}
               </div>
             </div>
+
 
             {# ── Filiação ────────────────────────────────────────── #}
             <div class="col-12 col-md-6">
@@ -231,7 +204,6 @@
                 <span class="small">Abrindo câmera...</span>
               </div>
 
-
               <div id="cam-error"
                    class="position-absolute top-0 start-0 w-100 h-100 d-flex flex-column align-items-center justify-content-center text-white"
                    style="display: none !important;">
@@ -280,179 +252,178 @@
     {% endif %}
 
 
-{# ═════════════════════════════════════════════════════════════
-     ETAPA 3 — Resumo Completo (Card) + Local/Destino
-     ═════════════════════════════════════════════════════════════ #}
-  {% if wizard.step == 3 %}
-  <div class="sheet">
-    <div class="sheet-header">
-      <div>
-        <h2>Resumo e Destino</h2>
-        <div class="muted small">Confira tudo e registre a entrada.</div>
-      </div>
-      <span class="badge text-bg-success">Etapa 3/3</span>
-    </div>
-
-    <div class="p-3 p-md-4">
-
-      {# ═══════════════════════════════════════════════════════════
-         CARTEIRA DO VISITANTE — Confirmação (sem edição / sem status)
-         ═══════════════════════════════════════════════════════════ #}
-      <div class="id-card mb-4">
-
-        {# ── Cabeçalho institucional ─────────────────────────────────── #}
-      <div class="id-card-header">
-        <div class="d-flex align-items-center gap-3">
-          <i class="bi bi-person-vcard-fill fs-3 opacity-100"></i>
-          <div>
-            <h2 class="id-card-title mb-0">Carteira de Visitante</h2>
-            <div class="small opacity-75">SISPORT — Sistema de Portaria</div>
-          </div>
+    {# ═════════════════════════════════════════════════════════════
+       ETAPA 3 — Resumo Completo (Card) + Local/Destino
+       ═════════════════════════════════════════════════════════════ #}
+    {% if wizard.step == 3 %}
+    <div class="sheet">
+      <div class="sheet-header">
+        <div>
+          <h2>Resumo e Destino</h2>
+          <div class="muted small">Confira tudo e registre a entrada.</div>
         </div>
+        <span class="badge text-bg-success">Etapa 3/3</span>
       </div>
 
-        <div class="id-card-body">
+      <div class="p-3 p-md-4">
 
-          {# ── Linha principal: Foto + Dados ─────────────────────── #}
-          <div class="d-flex flex-column flex-sm-row gap-3 align-items-center align-items-sm-start">
+        {# ═══ CARTEIRA DO VISITANTE — Confirmação ═══ #}
+        <div class="id-card mb-4">
 
-            {# Foto 1:1 #}
+          <div class="id-card-header">
+            <div class="d-flex align-items-center gap-3">
+              <i class="bi bi-person-vcard-fill fs-3 opacity-100"></i>
+              <div>
+                <h2 class="id-card-title mb-0">Carteira de Visitante</h2>
+                <div class="small opacity-75">SISPORT — Sistema de Portaria</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="id-card-body">
+
+            <div class="d-flex flex-column flex-sm-row gap-3 align-items-center align-items-sm-start">
+
+              {# Foto 1:1 #}
               <div class="text-center flex-shrink-0">
                 <div class="photo-box mx-auto" style="width:150px;height:150px;border-radius:8px;">
-                      {% if wizard.temp_photo_id %}
-                        <img src="{{ photo_url('temp', wizard.temp_photo_id) }}"
-                            alt="Foto capturada" class="rounded-3"
-                            style="width:160px; height:160px; object-fit:cover;">
-                      {% else %}
-                        <img src="{{ url_for('static', filename='img/avatar-placeholder.jpg') }}"
-                            alt="Sem foto" class="rounded-3 opacity-50"
-                            style="width:160px; height:160px; object-fit:cover;">
-                      {% endif %}
+                  {% if wizard.temp_photo_id %}
+                    <img src="{{ photo_url('temp', wizard.temp_photo_id) }}"
+                        alt="Foto capturada" class="rounded-3"
+                        style="width:160px; height:160px; object-fit:cover;">
+                  {% else %}
+                    <img src="{{ url_for('static', filename='img/avatar-placeholder.jpg') }}"
+                        alt="Sem foto" class="rounded-3 opacity-50"
+                        style="width:160px; height:160px; object-fit:cover;">
+                  {% endif %}
+                </div>
+
+                {# ── Badge da categoria selecionada (dinâmico) ── #}
+                {% set cat = wizard.category|default('civil') %}
+                {% set selected_category = namespace(
+                  label=cat,
+                  icon='bi-tag',
+                  badge_class='bg-secondary'
+                ) %}
+
+                {% for category in visitor_categories %}
+                  {% if category.value == cat %}
+                    {% set selected_category.label = category.label %}
+                    {% set selected_category.icon = category.icon %}
+                    {% set selected_category.badge_class = category.badge_class %}
+                  {% endif %}
+                {% endfor %}
+
+                <span class="badge {{ selected_category.badge_class }} px-3 py-1 mt-2 d-inline-block">
+                  <i class="bi {{ selected_category.icon }} me-1"></i>
+                  {{ selected_category.label }}
+                </span>
+              </div>
+
+              {# Dados de identificação #}
+              <div class="flex-grow-1 w-100">
+
+                <div class="border-bottom pb-2 mb-3">
+                  <div class="text-uppercase fw-bold text-muted" style="font-size:.6rem;letter-spacing:1.5px;">Nome Completo</div>
+                  <div class="fw-bold fs-5">{{ wizard.name }}</div>
+                </div>
+
+                <div class="row g-2">
+
+                  <div class="col-6 col-lg-4">
+                    <div class="text-uppercase fw-bold text-muted" style="font-size:.6rem;letter-spacing:1px;">CPF</div>
+                    <div class="fw-semibold">{{ wizard.cpf }}</div>
                   </div>
 
+                  <div class="col-6 col-lg-4">
+                    <div class="text-uppercase fw-bold text-muted" style="font-size:.6rem;letter-spacing:1px;">Telefone</div>
+                    <div class="fw-semibold">{{ wizard.phone }}</div>
+                  </div>
 
-              <div class="mt-2">
-                {% set cat = wizard.category|default('civil') %}
-                {% if cat == 'militar' %}
-                  <span class="badge bg-success px-3 py-1"><i class="bi bi-shield-fill me-1"></i>Militar</span>
-                {% elif cat == 'ex-militar' %}
-                  <span class="badge bg-warning text-dark px-3 py-1"><i class="bi bi-shield me-1"></i>Ex-Militar</span>
-                {% else %}
-                  <span class="badge bg-secondary px-3 py-1"><i class="bi bi-person me-1"></i>Civil</span>
-                {% endif %}
-              </div>
-            </div>
+                  {% if wizard.email %}
+                  <div class="col-12 col-lg-4">
+                    <div class="text-uppercase fw-bold text-muted" style="font-size:.6rem;letter-spacing:1px;">E-mail</div>
+                    <div class="fw-semibold small text-truncate">{{ wizard.email }}</div>
+                  </div>
+                  {% endif %}
 
-            {# Dados de identificação #}
-            <div class="flex-grow-1 w-100">
+                  <div class="col-12 col-lg-6">
+                    <div class="text-uppercase fw-bold text-muted" style="font-size:.6rem;letter-spacing:1px;">Mãe</div>
+                    <div class="fw-semibold">{{ wizard.mom_name }}</div>
+                  </div>
 
-              {# Nome em destaque #}
-              <div class="border-bottom pb-2 mb-3">
-                <div class="text-uppercase fw-bold text-muted" style="font-size:.6rem;letter-spacing:1.5px;">Nome Completo</div>
-                <div class="fw-bold fs-5">{{ wizard.name }}</div>
-              </div>
+                  {% if wizard.father_name %}
+                  <div class="col-12 col-lg-6">
+                    <div class="text-uppercase fw-bold text-muted" style="font-size:.6rem;letter-spacing:1px;">Pai</div>
+                    <div class="fw-semibold">{{ wizard.father_name }}</div>
+                  </div>
+                  {% endif %}
 
-              <div class="row g-2">
+                  {% if wizard.empresa %}
+                  <div class="col-12">
+                    <div class="text-uppercase fw-bold text-muted" style="font-size:.6rem;letter-spacing:1px;">Empresa / Vínculo</div>
+                    <div class="fw-semibold">{{ wizard.empresa }}</div>
+                  </div>
+                  {% endif %}
 
-                <div class="col-6 col-lg-4">
-                  <div class="text-uppercase fw-bold text-muted" style="font-size:.6rem;letter-spacing:1px;">CPF</div>
-                  <div class="fw-semibold">{{ wizard.cpf }}</div>
                 </div>
-
-                <div class="col-6 col-lg-4">
-                  <div class="text-uppercase fw-bold text-muted" style="font-size:.6rem;letter-spacing:1px;">Telefone</div>
-                  <div class="fw-semibold">{{ wizard.phone }}</div>
-                </div>
-
-                {% if wizard.email %}
-                <div class="col-12 col-lg-4">
-                  <div class="text-uppercase fw-bold text-muted" style="font-size:.6rem;letter-spacing:1px;">E-mail</div>
-                  <div class="fw-semibold small text-truncate">{{ wizard.email }}</div>
-                </div>
-                {% endif %}
-
-                <div class="col-12 col-lg-6">
-                  <div class="text-uppercase fw-bold text-muted" style="font-size:.6rem;letter-spacing:1px;">Mãe</div>
-                  <div class="fw-semibold">{{ wizard.mom_name }}</div>
-                </div>
-
-                {% if wizard.father_name %}
-                <div class="col-12 col-lg-6">
-                  <div class="text-uppercase fw-bold text-muted" style="font-size:.6rem;letter-spacing:1px;">Pai</div>
-                  <div class="fw-semibold">{{ wizard.father_name }}</div>
-                </div>
-                {% endif %}
-
-                {% if wizard.empresa %}
-                <div class="col-12">
-                  <div class="text-uppercase fw-bold text-muted" style="font-size:.6rem;letter-spacing:1px;">Empresa / Vínculo</div>
-                  <div class="fw-semibold">{{ wizard.empresa }}</div>
-                </div>
-                {% endif %}
-
               </div>
             </div>
           </div>
         </div>
+
+        {# ── Formulário de destino ──────────────────────────────── #}
+        <form method="post"
+              action="{{ url_for('visitor.wizard_finish') }}"
+              data-requires-destination="1">
+
+          <h5 class="fw-bold mb-3">
+            <i class="bi bi-geo-alt me-1 text-success"></i>Local / Destino
+          </h5>
+
+          <div class="mb-3">
+            {% include "components/destination_selector.html" %}
+          </div>
+
+          <div class="mt-4">
+            <label class="form-label">
+              Motivo da visita
+              {% if visit_reason_required %}
+                <span class="text-danger">*</span>
+              {% else %}
+                <span class="text-muted small">(opcional)</span>
+              {% endif %}
+            </label>
+
+            <textarea class="form-control form-control-lg"
+                      name="reason"
+                      rows="2"
+                      {% if visit_reason_required %}required{% endif %}
+                      placeholder="Ex: Reunião, entrega de documento, manutenção, atendimento..."></textarea>
+          </div>
+
+          {# ── Botões de ação ────────────────────────────────────── #}
+          <div class="d-flex gap-2 mt-4">
+            <a class="btn btn-outline-secondary btn-lg flex-fill py-2"
+               href="{{ url_for('visitor.wizard_back', step=2) }}">
+              <i class="bi bi-arrow-left me-1"></i>Voltar
+            </a>
+            <button type="submit" class="btn btn-success btn-lg flex-fill py-3">
+              <i class="bi bi-check-lg me-1"></i>Finalizar e Registrar Entrada
+            </button>
+          </div>
+        </form>
+
       </div>
-
-      {# ── Formulário de destino ──────────────────────────────── #}
-      <form method="post"
-      action="{{ url_for('visitor.wizard_finish') }}"
-      data-requires-destination="1">
-
-                <h5 class="fw-bold mb-3">
-          <i class="bi bi-geo-alt me-1 text-success"></i>Local / Destino
-        </h5>
-
-        <div class="mb-3">
-          {% include "components/destination_selector.html" %}
-        </div>
-
-        <div class="mt-4">
-          <label class="form-label">
-            Motivo da visita
-            {% if visit_reason_required %}
-              <span class="text-danger">*</span>
-            {% else %}
-              <span class="text-muted small">(opcional)</span>
-            {% endif %}
-          </label>
-
-          <textarea class="form-control form-control-lg"
-                    name="reason"
-                    rows="2"
-                    {% if visit_reason_required %}required{% endif %}
-                    placeholder="Ex: Reunião, entrega de documento, manutenção, atendimento..."></textarea>
-        </div>
-      </div>
-
-
-        {# ── Botões de ação ────────────────────────────────────── #}
-        <div class="d-flex gap-2 mt-4">
-          <a class="btn btn-outline-secondary btn-lg flex-fill py-2"
-             href="{{ url_for('visitor.wizard_back', step=2) }}">
-            <i class="bi bi-arrow-left me-1"></i>Voltar
-          </a>
-          <button type="submit" class="btn btn-success btn-lg flex-fill py-3">
-            <i class="bi bi-check-lg me-1"></i>Finalizar e Registrar Entrada
-          </button>
-        </div>
-      </form>
-
     </div>
-  </div>
-  {% endif %}
+    {% endif %}
 
-</div>
+  </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
-{# Pré-carregamento do modelo de detecção facial (global) #}
 <script src="{{ url_for('static', filename='js/face-preloader.js') }}"></script>
-
 <script src="/static/js/face-cropper.js"></script>
 <script src="/static/js/camera.js"></script>
 {% endblock %}
-

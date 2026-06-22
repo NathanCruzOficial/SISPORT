@@ -31,9 +31,27 @@ O **SISPORT** oferece um fluxo completo de controle de visitantes, do cadastro �
 
 ## 📁 Estrutura de Diretórios (Templates)
 
-templates/ ├── base.html # Layout base (navbar, footer, Bootstrap) ├── visitor_wizard.html # Wizard de cadastro — 3 etapas ├── report.html # Relatório de visitas (tela) └── print_day.html # Relatório imprimível A4 (standalone)
+## Estrutura do projeto
 
-static/ ├── js/ │ ├── camera.js # Controle da webcam (etapa 2 do wizard) │ └── mask.js # Máscaras de CPF e telefone (IMask) └── img/ └── avatar-placeholder.jpg # Foto padrão quando não há imagem
+```text
+SISPORT/
+├── main.py                    # Ponto de entrada da aplicação
+├── app/
+│   ├── __init__.py             # Factory/configuração do Flask
+│   ├── config.py               # Configurações principais
+│   ├── extensions.py           # Extensões Flask, banco, migrate etc.
+│   ├── models/                 # Modelos SQLAlchemy
+│   ├── views/                  # Rotas Flask
+│   ├── controllers/            # Regras de fluxo da aplicação
+│   ├── services/               # Serviços auxiliares
+│   ├── templates/              # Templates HTML/Jinja
+│   ├── static/                 # CSS, JS, imagens e bibliotecas locais
+│   └── utils/                  # Funções utilitárias
+├── migrations/                 # Migrações do banco de dados
+├── package/                    # Scripts e configuração de build
+├── installer/                  # Instalador Inno Setup
+└── .github/workflows/          # Automação de release
+
 
 
 ## 📄 Templates

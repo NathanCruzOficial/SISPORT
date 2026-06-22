@@ -284,6 +284,7 @@ def checkout(visit_id: int):
 
 @visitor_bp.route("/wizard", methods=["GET"])
 def wizard():
+    from app.models.settings import get_visitor_categories
     """
     Exibe o wizard de 3 etapas para novo cadastro de visitante.
     """
@@ -295,6 +296,8 @@ def wizard():
         wizard=session["wizard"],
         destination_tree=_build_destination_tree(),
         visit_reason_required=_visit_reason_required(),
+        visitor_categories=get_visitor_categories(),
+        
     )
 
 
