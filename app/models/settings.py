@@ -76,12 +76,6 @@ _CATEGORY_META = {
         "btn_class": "btn-outline-success",
         "badge_class": "bg-success",
     },
-    "ex-militar": {
-        "label": "Ex-Militar",
-        "icon": "bi-shield",
-        "btn_class": "btn-outline-warning",
-        "badge_class": "bg-warning text-dark",
-    },
     "prestador": {
         "label": "Prestador",
         "icon": "bi-tools",
@@ -143,40 +137,37 @@ def _parse_categories_raw(raw: str) -> list[str]:
     return values
 
 
-def get_visitor_categories() -> list[dict]:
+def get_visitor_categories(include_inactive: bool = False) -> list[dict]:
     """
-    Retorna as categorias de visitante configuradas em settings.
+    Retorna as categorias de visitante.
 
-    A configuração esperada é:
-        key   = visitor_categories
-        value = civil,militar,ex-militar,prestador
-
-    Returns:
-        list[dict]: Lista pronta para uso no template, com
-        value / label / icon / btn_class / badge_class.
+    Agora lê da tabela `visitor_categories`. Mantém o MESMO formato de dict
+    (value/label/icon/btn_class/badge_class) para não quebrar o wizard.
     """
-    raw = get_setting("visitor_categories", "civil,militar,ex-militar")
+    # Import local evita import circular
+    from app.models.visitor_category import VisitorCategory
 
-    values = _parse_categories_raw(raw)
+    query = VisitorCategory.query
+    if not include_inactive:
+        query = query.filter_by(is_active=True)
 
-    categories = []
+    rows = query.order_by(
+        VisitorCategory.sort_order.asc(),
+        VisitorCategory.label.asc(),
+    ).all()
 
-    for value in values:
-        info = _CATEGORY_META.get(value, {})
+    categories = [
+        {
+            "value": row.value,
+            "label": row.label,
+            "icon": row.icon or "bi-tag",
+            "btn_class": row.btn_class or "btn-outline-secondary",
+            "badge_class": row.badge_class or "bg-secondary",
+        }
+        for row in rows
+    ]
 
-        label = info.get(
-            "label",
-            value.replace("-", " ").replace("_", " ").title(),
-        )
-
-        categories.append({
-            "value": value,
-            "label": label,
-            "icon": info.get("icon", "bi-tag"),
-            "btn_class": info.get("btn_class", "btn-outline-secondary"),
-            "badge_class": info.get("badge_class", "bg-secondary"),
-        })
-
+    # Fallback de segurança (banco vazio)
     if not categories:
         categories.append({
             "value": "civil",
@@ -187,3 +178,4 @@ def get_visitor_categories() -> list[dict]:
         })
 
     return categories
+

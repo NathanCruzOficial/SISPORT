@@ -33,6 +33,16 @@
     "ex-militar": "Ex-Militar"
   };
 
+  // ── Gera cores distintas usando HSL (hue espaçado uniformemente) ──
+  function generateDistinctColors(count) {
+    const colors = [];
+    for (let i = 0; i < count; i++) {
+      const hue = (i * 360 / count) % 360;
+      colors.push(`hsl(${hue}, 55%, 45%)`);
+    }
+    return colors;
+  }
+
   // ─────────────────────────────────────────────────────────────
   // 2. Carrega dados injetados pelo Jinja
   // ─────────────────────────────────────────────────────────────
@@ -80,6 +90,9 @@
         meta.data.forEach(function (arc, index) {
           const value = dataset.data[index];
           if (!value) return;
+
+          // Respeita a visibilidade do slice (quando o usuário oculta pela legenda)
+          if (!chart.getDataVisibility(index)) return;
 
           const angle = (arc.startAngle + arc.endAngle) / 2;
           const outerRadius = arc.outerRadius + 18;
@@ -530,12 +543,7 @@ new Chart(document.getElementById("chartCategories"), {
     labels: DATA.categoryLabels,
     datasets: [{
       data: DATA.categoryValues,
-      backgroundColor: [
-        COLORS.blue,
-        COLORS.olive,
-        COLORS.yellow,
-        COLORS.gray
-      ],
+      backgroundColor: generateDistinctColors(DATA.categoryLabels.length),
       borderWidth: 2,
       borderColor: "#fff"
     }]

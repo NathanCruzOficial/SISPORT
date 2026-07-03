@@ -509,7 +509,7 @@ def _run_flask():
     app.run(
         host=HOST,
         port=PORT,
-        debug=False,
+        debug=True,
         use_reloader=False,
     )
 

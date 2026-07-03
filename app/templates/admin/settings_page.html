@@ -72,9 +72,9 @@
       {# Seções (subcategorias) — inclui partials dinamicamente #}
       {% for section in current_tab.sections %}
       <div class="card shadow-sm border-0 mb-3" id="section-{{ section.key }}">
-        <div class="card-header bg-white d-flex align-items-center gap-2 py-2">
+        <div class="card-header bg-dark-subtle d-flex align-items-center gap-2 py-2">
           {% if section.icon %}
-          <i class="bi {{ section.icon }} text-primary"></i>
+          <i class="bi {{ section.icon }} text-black"></i>
           {% endif %}
           <span class="fw-semibold">{{ section.label }}</span>
         </div>

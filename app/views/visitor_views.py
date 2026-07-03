@@ -37,6 +37,15 @@ from ..controllers.visitor_controller import (
 )
 from ..models.visitor_destination import VisitorDestinationGroup, VisitorDestinationPlace
 from ..models.settings import get_setting
+from ..models.visitor_category import (
+    VisitorCategory,
+    get_active_visitor_categories,
+    get_all_visitor_categories,
+    get_visitor_category_by_id,
+    get_visitor_category_by_value,
+    get_default_visitor_category,
+)
+
 
 from ..utils.validators import normalize_cpf, is_valid_cpf, validate_required_email
 from sqlalchemy.exc import IntegrityError
@@ -46,6 +55,63 @@ from collections import Counter
 from datetime import date, datetime, timedelta
 
 
+# =====================================================================
+# Helpers — Categorias
+# =====================================================================
+
+def _active_categories():
+    """Retorna categorias ativas para formulários."""
+    return get_active_visitor_categories()
+
+
+def _resolve_category_id_from_form(field_name: str = "category_id") -> int:
+    """
+    Lê e valida category_id vindo do formulário.
+
+    Aceita apenas categoria ativa.
+    """
+    category_id = request.form.get(field_name, type=int)
+
+    category = get_visitor_category_by_id(
+        category_id,
+        active_only=True,
+    )
+
+    if not category:
+        raise ValueError("Categoria inválida ou inativa.")
+
+    return category.id
+
+
+def _resolve_category_filter_id() -> int | None:
+    """
+    Lê filtro de categoria da URL.
+
+    Novo padrão:
+        ?category_id=3
+
+    Compatibilidade temporária:
+        ?category=civil
+    """
+    category_id = request.args.get("category_id", type=int)
+
+    if category_id:
+        category = get_visitor_category_by_id(
+            category_id,
+            active_only=False,
+        )
+        return category.id if category else None
+
+    old_category_value = request.args.get("category_id", "").strip().lower()
+
+    if old_category_value and old_category_value != "all":
+        category = get_visitor_category_by_value(
+            old_category_value,
+            active_only=False,
+        )
+        return category.id if category else None
+
+    return None
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -70,6 +136,7 @@ def inject_photo_helper():
         ) + f"?t={int(time())}"
 
     return {"photo_url": photo_url}
+
 
 # =====================================================================
 # Helpers — Destinos de visita
@@ -284,7 +351,6 @@ def checkout(visit_id: int):
 
 @visitor_bp.route("/wizard", methods=["GET"])
 def wizard():
-    from app.models.settings import get_visitor_categories
     """
     Exibe o wizard de 3 etapas para novo cadastro de visitante.
     """
@@ -296,18 +362,19 @@ def wizard():
         wizard=session["wizard"],
         destination_tree=_build_destination_tree(),
         visit_reason_required=_visit_reason_required(),
-        visitor_categories=get_visitor_categories(),
-        
+        visitor_categories=_active_categories(),
     )
-
 
 
 @visitor_bp.route("/wizard/step1", methods=["POST"])
 def wizard_step1():
     """
-    Processa a Etapa 1 do wizard (dados pessoais).
+    Processa a Etapa 1 do wizard.
+    Valida category_id contra a tabela VisitorCategory.
     """
     try:
+        category_id = _resolve_category_id_from_form("category_id")
+
         wizard_step1_submit(
             request.form.get("name", ""),
             request.form.get("father_name", ""),
@@ -316,11 +383,14 @@ def wizard_step1():
             request.form.get("phone", ""),
             request.form.get("email", ""),
             request.form.get("empresa", ""),
-            request.form.get("category", "civil"),
+            category_id,
         )
+
     except Exception as e:
         flash(str(e), "danger")
+
     return redirect(url_for("visitor.wizard"))
+
 
 
 @visitor_bp.route("/wizard/step2", methods=["POST"])
@@ -569,7 +639,14 @@ def _build_dashboard_data():
 
     total_visits = len(visits)
 
-    total_visitors = db.session.query(Visitor).count()
+    total_visitors = (
+    db.session.query(Visitor)
+    .join(Visit, Visit.visitor_id == Visitor.id)
+    .filter(db.func.date(Visit.check_in) >= dt_from)
+    .filter(db.func.date(Visit.check_in) <= dt_to)
+    .distinct()
+    .count()
+    )
 
 
     closed_visits = [
@@ -586,7 +663,11 @@ def _build_dashboard_data():
 
     for visit in visits:
         visitor_name = visit.visitor.name if visit.visitor else "Não informado"
-        visitor_category = visit.visitor.category if visit.visitor else "civil"
+        if visit.visitor and visit.visitor.category:
+            visitor_category = visit.visitor.category.label
+        else:
+            visitor_category = "Sem categoria"
+
 
         check_in = visit.check_in
         check_out = visit.check_out
@@ -603,12 +684,16 @@ def _build_dashboard_data():
             "category": visitor_category,
             "destination": (visit.destination or "Não informado").strip().upper(),
             "check_in": check_in.strftime("%d/%m/%Y %H:%M") if check_in else "-",
-            "check_out": check_out.strftime("%d/%m/%Y %H:%M") if check_out else "Em aberto",
+            "check_out": 
+            check_out.strftime("%d/%m/%Y %H:%M") if check_out else "Em aberto",
             "duration": duration,
             "month": check_in.month if check_in else None,
             "weekday": check_in.weekday() if check_in else None,
             "hour": check_in.hour if check_in else None,
+            "check_in_iso": check_in.isoformat() if check_in else None,   # ← ADICIONAR
+            "check_out_iso": check_out.isoformat() if check_out else None, # ← ADICIONAR
         })
+
 
     # ─────────────────────────────────────────────────────────────
     # Tempo médio de permanência
@@ -644,17 +729,6 @@ def _build_dashboard_data():
             "value": avg_duration,
             "icon": "bi-clock-history",
         },
-        # Futuramente, basta incluir novos itens aqui:
-        # {
-        #     "label": "Alterações",
-        #     "value": total_alteracoes,
-        #     "icon": "bi-exclamation-triangle",
-        # },
-        # {
-        #     "label": "Objetos perdidos",
-        #     "value": total_objetos_perdidos,
-        #     "icon": "bi-box-seam",
-        # },
     ]
 
 
@@ -741,45 +815,53 @@ def _build_dashboard_data():
     ]
 
     # ─────────────────────────────────────────────────────────────
-    # Categorias de visitante
+    # Categorias de visitante via Foreign Key
     # ─────────────────────────────────────────────────────────────
-    category_labels_map = {
-        "civil": "Civil",
-        "militar": "Militar",
-        "ex-militar": "Ex-Militar",
-    }
-
     category_counter = Counter(
-        v.visitor.category or "civil"
+        v.visitor.category_id
         for v in visits
+        if v.visitor is not None and v.visitor.category_id is not None
     )
 
-    ordered_categories = [
-        "civil",
-        "militar",
-        "ex-militar",
+    categories = get_all_visitor_categories()
+    category_by_id = {c.id: c for c in categories}
+
+    known_items = [
+        (category_id, count)
+        for category_id, count in category_counter.items()
+        if category_id in category_by_id
     ]
 
+    unknown_items = [
+        (category_id, count)
+        for category_id, count in category_counter.items()
+        if category_id not in category_by_id
+    ]
+
+    known_items.sort(
+        key=lambda item: (
+            -item[1],
+            category_by_id[item[0]].label.lower(),
+        )
+    )
+
     category_labels = [
-        category_labels_map.get(category, category.capitalize())
-        for category in ordered_categories
+        category_by_id[category_id].label
+        for category_id, _ in known_items
     ]
 
     category_values = [
-        category_counter.get(category, 0)
-        for category in ordered_categories
+        count
+        for _, count in known_items
     ]
 
-    unknown_categories_total = sum(
-        count
-        for category, count in category_counter.items()
-        if category not in ordered_categories
-    )
+    unknown_total = sum(count for _, count in unknown_items)
 
-    if unknown_categories_total:
-        category_labels.append("Outros")
-        category_values.append(unknown_categories_total)
+    if unknown_total:
+        category_labels.append("Sem categoria")
+        category_values.append(unknown_total)
 
+    
     # ─────────────────────────────────────────────────────────────
     # Média de pessoas presentes por horário
     # Considera o período entre check_in e check_out
@@ -991,14 +1073,16 @@ def report_page():
         title = f"Relatório — {dt_from.strftime('%d/%m/%Y')} a {dt_to.strftime('%d/%m/%Y')}"
 
     return render_template(
-        "report_page.html",
-        visits=visits,
-        title=title,
-        filters=filters,
-        total=len(visits),
-        open_count=open_ct,
-        closed_count=closed_ct,
-    )
+    "report_page.html",
+    visits=visits,
+    title=title,
+    filters=filters,
+    total=len(visits),
+    open_count=open_ct,
+    closed_count=closed_ct,
+    visitor_categories=_active_categories(),
+)
+
 
 
 @visitor_bp.route("/report/print", methods=["GET"])
@@ -1042,7 +1126,8 @@ def _build_report_query():
     date_to   = request.args.get("date_to", "")
     search    = request.args.get("search", "").strip()
     status    = request.args.get("status", "all")
-    category  = request.args.get("category", "all")
+    category_id = _resolve_category_filter_id()
+
 
     today = date.today()
     try:
@@ -1069,8 +1154,10 @@ def _build_report_query():
     elif status == "closed":
         query = query.filter(Visit.check_out.isnot(None))
 
-    if category in ("civil", "militar", "ex-militar"):
-        query = query.filter(Visitor.category == category)
+    # Filtro dinâmico por categoria (ativas)
+    if category_id:
+        query = query.filter(Visitor.category_id == category_id)
+
 
     if search:
         like = f"%{search}%"
@@ -1095,7 +1182,8 @@ def _build_report_query():
         "date_to_fmt":   dt_to.strftime("%d/%m/%Y"),
         "search":        search,
         "status":        status,
-        "category":      category,
+        "category_id": category_id or "",
+
     }
 
     return visits, filters, dt_from, dt_to, open_count, closed_count
@@ -1107,21 +1195,22 @@ def _build_report_query():
 
 @visitor_bp.route("/visitors/<int:visitor_id>/edit", methods=["GET"])
 def visitor_edit(visitor_id):
-    """
-    Exibe o formulário de edição de um visitante existente.
-    """
     v = db.session.get(Visitor, visitor_id)
     if not v:
         flash("Visitante não encontrado.", "warning")
         return redirect(url_for("visitor.identify"))
-    return render_template("visitor_edit.html", visitor=v)
+
+    return render_template(
+        "visitor_edit.html",
+        visitor=v,
+        visitor_categories=_active_categories()
+    )
 
 
 @visitor_bp.route("/visitors/<int:visitor_id>/edit", methods=["POST"])
 def visitor_edit_post(visitor_id):
-    """
-    Processa o formulário de edição de visitante.
-    """
+    # ... (código existente de leitura/validação de campos)
+    
     v = db.session.get(Visitor, visitor_id)
     if not v:
         flash("Visitante não encontrado.", "warning")
@@ -1132,7 +1221,11 @@ def visitor_edit_post(visitor_id):
     mom_name    = (request.form.get("mom_name") or "").strip().upper()
     father_name = (request.form.get("father_name") or "").strip().upper()
     empresa     = (request.form.get("empresa") or "").strip().upper()
-    category    = (request.form.get("category") or "civil").strip().lower()
+    try:
+        category_id = _resolve_category_id_from_form("category_id")
+    except ValueError as e:
+        flash(str(e), "danger")
+        return redirect(url_for("visitor.visitor_edit", visitor_id=v.id))
 
     try:
         email = validate_required_email(request.form.get("email", ""))
@@ -1148,9 +1241,6 @@ def visitor_edit_post(visitor_id):
         return redirect(url_for("visitor.visitor_edit", visitor_id=v.id))
     if not mom_name:
         flash("Nome da mãe é obrigatório.", "danger")
-        return redirect(url_for("visitor.visitor_edit", visitor_id=v.id))
-    if category not in ("civil", "militar", "ex-militar"):
-        flash("Categoria inválida.", "danger")
         return redirect(url_for("visitor.visitor_edit", visitor_id=v.id))
 
     try:
@@ -1168,7 +1258,8 @@ def visitor_edit_post(visitor_id):
     v.mom_name    = mom_name
     v.father_name = father_name or None
     v.empresa     = empresa or None
-    v.category    = category
+    v.category_id = category_id
+
 
     try:
         db.session.commit()

@@ -16,12 +16,105 @@ from sqlalchemy import or_
 
 from ..extensions import db
 from ..models.visitor import Visitor, Visit, TempPhoto
+from ..models.visitor_category import (
+    VisitorCategory,
+    get_active_visitor_categories,
+    get_visitor_category_by_id,
+    get_visitor_category_by_value,
+    get_default_visitor_category,
+)
+
 from ..utils.photo import parse_photo_data_url
 from ..utils.validators import normalize_cpf, is_valid_cpf, validate_required_email
 
 
-# ── Categorias válidas ───────────────────────────────────────────────
-VALID_CATEGORIES = ("civil", "militar", "ex-militar")
+# =====================================================================
+# Helpers — Categorias (dinâmicas via banco)
+# =====================================================================
+
+def _active_categories():
+    """
+    Retorna lista de categorias ativas, ordenadas.
+    Mantido como wrapper para compatibilidade interna.
+    """
+    return get_active_visitor_categories()
+
+
+def _resolve_active_category_by_id(category_id) -> VisitorCategory:
+    """
+    Valida e retorna uma categoria ativa pelo ID.
+
+    Usado no wizard e edição de visitante.
+    """
+    try:
+        category_id = int(category_id)
+    except (TypeError, ValueError):
+        raise ValueError("Categoria inválida.")
+
+    category = get_visitor_category_by_id(
+        category_id,
+        active_only=True,
+    )
+
+    if not category:
+        raise ValueError("Categoria inválida ou inativa.")
+
+    return category
+
+
+def _resolve_category_from_wizard_data(w: dict) -> VisitorCategory:
+    """
+    Resolve a categoria salva no wizard.
+
+    Novo padrão:
+        w["category_id"]
+
+    Compatibilidade temporária:
+        w["category"] = "civil"
+    """
+    category_id = w.get("category_id")
+
+    if category_id:
+        try:
+            category = get_visitor_category_by_id(
+                int(category_id),
+                active_only=False,
+            )
+            if category:
+                return category
+        except (TypeError, ValueError):
+            pass
+
+    # Compatibilidade com sessão antiga usando string
+    old_category_value = (w.get("category") or "").strip().lower()
+
+    if old_category_value:
+        category = get_visitor_category_by_value(
+            old_category_value,
+            active_only=False,
+        )
+
+        if category:
+            return category
+
+    category = get_default_visitor_category()
+
+    if not category:
+        raise ValueError(
+            "Nenhuma categoria de visitante disponível. "
+            "Cadastre pelo menos uma categoria ativa."
+        )
+
+    return category
+
+
+def _default_category_id() -> int | None:
+    """
+    Retorna o ID da categoria padrão, se existir.
+    """
+    category = get_default_visitor_category()
+    return category.id if category else None
+
 
 
 # =====================================================================
@@ -60,7 +153,7 @@ def wizard_start_for_new_visitor(cpf: str = ""):
         "empresa": "",
         "father_name": "",
         "mom_name": "",
-        "category": "civil",
+        "category_id": _default_category_id(),
         "temp_photo_id": None,      # ← ID da foto na tabela temp_photos
         "photo_captured": False,     # ← indica se capturou foto
     }
@@ -122,9 +215,12 @@ def _check_duplicate_fields(name: str, father_name: str, mom_name: str,
 
 def wizard_step1_submit(name: str, father_name: str, mom_name: str,
                         cpf: str, phone: str, email: str, empresa: str,
-                        category: str = "civil"):
+                        category_id=None):
     """
-    Processa e valida os dados da Etapa 1 do wizard (dados pessoais).
+    Processa e valida os dados da Etapa 1 do wizard.
+
+    Agora a categoria é recebida como category_id, Foreign Key
+    para VisitorCategory.
     """
     w = session.get("wizard") or {}
 
@@ -132,17 +228,21 @@ def wizard_step1_submit(name: str, father_name: str, mom_name: str,
     father_name = (father_name or "").strip().upper()
     mom_name = (mom_name or "").strip().upper()
     empresa = (empresa or "").strip().upper()
-    category = (category or "civil").strip().lower()
+
+    category = _resolve_active_category_by_id(category_id)
 
     cpf = normalize_cpf(cpf or "")
+
     if not is_valid_cpf(cpf):
         raise ValueError("CPF inválido. Verifique e tente novamente.")
 
     phone = (phone or "").strip()
+
     if not phone:
         raise ValueError("Telefone/Celular é obrigatório.")
 
     email = (email or "").strip()
+
     if email:
         email = validate_required_email(email).lower()
     else:
@@ -150,22 +250,36 @@ def wizard_step1_submit(name: str, father_name: str, mom_name: str,
 
     if not name:
         raise ValueError("Nome completo é obrigatório.")
+
     if not mom_name:
         raise ValueError("Nome da mãe é obrigatório.")
-    if category not in VALID_CATEGORIES:
-        raise ValueError(f"Categoria inválida: '{category}'. Use: {', '.join(VALID_CATEGORIES)}.")
 
     _check_duplicate_fields(
-        name=name, father_name=father_name, mom_name=mom_name,
-        cpf=cpf, phone=phone, email=email,
+        name=name,
+        father_name=father_name,
+        mom_name=mom_name,
+        cpf=cpf,
+        phone=phone,
+        email=email,
     )
 
     w.update({
-        "name": name, "father_name": father_name, "mom_name": mom_name,
-        "cpf": cpf, "phone": phone, "email": email,
-        "empresa": empresa, "category": category, "step": 2,
+        "name": name,
+        "father_name": father_name,
+        "mom_name": mom_name,
+        "cpf": cpf,
+        "phone": phone,
+        "email": email,
+        "empresa": empresa,
+        "category_id": category.id,
+        "step": 2,
     })
+
+    # Remove chave antiga, caso exista de sessões anteriores
+    w.pop("category", None)
+
     session["wizard"] = w
+
 
 
 def wizard_step2_submit(photo_data_url: str | None):
@@ -220,47 +334,63 @@ def wizard_step2_submit(photo_data_url: str | None):
 def create_visitor_if_not_exists_from_wizard() -> Visitor:
     """
     Finaliza o wizard: cria o visitante no banco de dados a partir dos
-    dados da sessão. A foto é recuperada da tabela temp_photos e salva
-    como BLOB no registro definitivo do visitante.
+    dados da sessão.
+
+    A foto é recuperada da tabela temp_photos e salva como BLOB no
+    registro definitivo do visitante.
     """
     w = session.get("wizard") or {}
-    name        = (w.get("name") or "").strip()
+
+    name = (w.get("name") or "").strip()
     father_name = (w.get("father_name") or "").strip()
-    mom_name    = (w.get("mom_name") or "").strip()
-    cpf         = (w.get("cpf") or "").strip()
-    phone       = (w.get("phone") or "").strip()
-    email       = w.get("email") or None
-    empresa     = (w.get("empresa") or "").strip()
-    category    = (w.get("category") or "civil").strip()
+    mom_name = (w.get("mom_name") or "").strip()
+    cpf = (w.get("cpf") or "").strip()
+    phone = (w.get("phone") or "").strip()
+    email = w.get("email") or None
+    empresa = (w.get("empresa") or "").strip()
+
+    category = _resolve_category_from_wizard_data(w)
 
     if not name or not cpf or not phone or not mom_name:
-        raise ValueError("Cadastro incompleto (nome, cpf, telefone e nome da mãe).")
+        raise ValueError("Cadastro incompleto: nome, CPF, telefone e nome da mãe são obrigatórios.")
 
     existing = find_visitor_by_cpf(cpf)
+
     if existing:
-        # ── Limpa foto temporária se existir ──────────────────────
         _cleanup_temp_photo(w.get("temp_photo_id"))
         return existing
 
-    # ── Recupera foto da tabela temporária ────────────────────────
     photo_bytes = None
-    photo_mime  = None
+    photo_mime = None
+
     temp_id = w.get("temp_photo_id")
+
     if temp_id:
         temp = db.session.get(TempPhoto, temp_id)
+
         if temp:
             photo_bytes = temp.photo_data
-            photo_mime  = temp.photo_mimetype
-            db.session.delete(temp)  # Limpa o registro temporário
+            photo_mime = temp.photo_mimetype
+            db.session.delete(temp)
 
     visitor = Visitor(
-        name=name, cpf=cpf, phone=phone, email=email,
-        empresa=empresa, father_name=father_name, mom_name=mom_name,
-        category=category, photo_data=photo_bytes, photo_mimetype=photo_mime,
+        name=name,
+        cpf=cpf,
+        phone=phone,
+        email=email,
+        empresa=empresa,
+        father_name=father_name or None,
+        mom_name=mom_name,
+        category_id=category.id,
+        photo_data=photo_bytes,
+        photo_mimetype=photo_mime,
     )
+
     db.session.add(visitor)
     db.session.commit()
+
     return visitor
+
 
 
 def _cleanup_temp_photo(temp_id: str | None):

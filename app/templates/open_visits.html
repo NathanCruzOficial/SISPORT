@@ -1,4 +1,6 @@
 {% extends "base.html" %}
+{% import "components/visitor_category.html" as visitor_category %}
+
 {% block content %}
 <div class="container-fluid px-3 px-md-4 py-3">
 
@@ -57,7 +59,7 @@
     </div>
     <div class="col-6 col-md-3">
         <div class="card border-0 shadow-sm text-center py-2">
-            {% set oldest = visits[-1].check_in if visits else None %}
+            {% set oldest = visits[0].check_in if visits else None %}
             <div class="d-flex align-items-center justify-content-center gap-2">
             <i class="bi bi-hourglass-split text-warning fs-4"></i>
             <div class="fw-bold fs-4 text-warning"
@@ -91,7 +93,7 @@
         </thead>
         <tbody>
           {% for v in visits %}
-          <tr data-searchable="{{ v.visitor.name|lower }} {{ v.visitor.cpf }} {{ v.destination|lower }}">
+          <tr data-searchable="{{ v.visitor.name|lower }} {{ v.visitor.cpf }} {{ v.destination|lower }} {{ v.visitor.category.label|lower if v.visitor.category else 'civil' }}">
             {# Status — sempre verde (aberto) #}
             <td>
               <span class="badge text-bg-success" title="Dentro da instalação">●</span>
@@ -101,15 +103,19 @@
             <td>
               <div class="photo-box" style="width:100px;height:100px;border-radius:12px;">
                 {% if v.visitor.photo_data %}
-                      <img src="{{ photo_url('visitor', v.visitor.id) }}"
-                          alt="Foto" class="rounded-3"
-                          style="width:100px; height:100px; object-fit:cover;">
-                    {% else %}
-                      <img src="{{ url_for('static', filename='img/avatar-placeholder.jpg') }}"
-                          alt="Sem foto" class="rounded-3 opacity-50"
-                          style="width:100px; height:100px; object-fit:cover;">
-                    {% endif %}
-                  </div>
+                  <img src="{{ photo_url('visitor', v.visitor.id) }}"
+                      alt="Foto"
+                      class="rounded-3"
+                      style="width:100px; height:100px; object-fit:cover;">
+                {% else %}
+                  <img src="{{ url_for('static', filename='img/avatar-placeholder.jpg') }}"
+                      alt="Sem foto"
+                      class="rounded-3 opacity-50"
+                      style="width:100px; height:100px; object-fit:cover;">
+                {% endif %}
+              </div>
+            </td>
+
             {# Dados do visitante #}
             <td>
               <div class="fw-semibold">{{ v.visitor.name }}</div>
@@ -119,11 +125,10 @@
               <div class="text-muted small">
                 <i class="bi bi-telephone"></i> {{ v.visitor.phone }}
               </div>
-              {% if v.visitor.category and v.visitor.category != 'civil' %}
               <div class="small mt-1">
-                <span class="badge text-bg-warning text-dark">{{ v.visitor.category|capitalize }}</span>
+                {{ visitor_category.badge(v.visitor.category) }}
               </div>
-              {% endif %}
+
             </td>
 
             {# Destino #}

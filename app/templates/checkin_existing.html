@@ -1,4 +1,8 @@
 {% extends "base.html" %}
+{% import "components/visitor_category.html" as visitor_category %}
+
+
+
 {% block content %}
 <div class="center-card">
   <div class="card-body">
@@ -32,7 +36,7 @@
           <div class="text-center flex-shrink-0">
             <div class="photo-box mx-auto" style="width:150px;height:150px;border-radius:8px;">
               {% if visitor.photo_data %}
-                <img src="{{ photo_url('visitor', visitor.id) }}" ...>
+                <img src="{{ photo_url('visitor', visitor.id) }}"alt="Foto do visitante" class="w-100 h-100" style="object-fit: cover;">
               {% else %}
                 <img src="{{ url_for('static', filename='img/avatar-placeholder.jpg') }}"
                       alt="Sem foto"
@@ -41,15 +45,9 @@
               {% endif %}
             </div>
             <div class="mt-2">
-              {% set cat = visitor.category|default('civil') %}
-              {% if cat == 'militar' %}
-                <span class="badge bg-success px-3 py-1"><i class="bi bi-shield-fill me-1"></i>Militar</span>
-              {% elif cat == 'ex-militar' %}
-                <span class="badge bg-warning text-dark px-3 py-1"><i class="bi bi-shield me-1"></i>Ex-Militar</span>
-              {% else %}
-                <span class="badge bg-secondary px-3 py-1"><i class="bi bi-person me-1"></i>Civil</span>
-              {% endif %}
+              {{ visitor_category.badge(visitor.category) }}
             </div>
+
           </div>
 
           {# Dados de identificação #}

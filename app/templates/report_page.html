@@ -1,4 +1,6 @@
 {% extends "base.html" %}
+{% import "components/visitor_category.html" as visitor_category %}
+
 
 {% block styles %}
 <style>
@@ -111,16 +113,12 @@
           </select>
         </div>
 
-        {# Categoria #}
+        {# Categorias #}
         <div class="col-6 col-md-auto">
           <label class="form-label small mb-0 text-muted">Categoria</label>
-          <select name="category" class="form-select form-select-sm">
-            <option value="all"        {{ 'selected' if filters.category == 'all' }}>Todas</option>
-            <option value="civil"      {{ 'selected' if filters.category == 'civil' }}>Civil</option>
-            <option value="militar"    {{ 'selected' if filters.category == 'militar' }}>Militar</option>
-            <option value="ex-militar" {{ 'selected' if filters.category == 'ex-militar' }}>Ex-Militar</option>
-          </select>
+          {{ visitor_category.filter_select(visitor_categories, filters.category_id, 'category_id') }}
         </div>
+
 
         {# Botões filtro #}
         <div class="col-12 col-md-auto d-flex gap-1">
@@ -136,7 +134,7 @@
     </form>
 
     {# ── Filtros ativos (pills) ─────────────────────────────────── #}
-    {% set has_active = filters.search or filters.status != 'all' or filters.category != 'all' %}
+    {% set has_active = filters.search or filters.status != 'all' or filters.category_id != 'all' %}
     {% if has_active %}
     <div class="d-flex flex-wrap gap-1 mt-2">
       <small class="text-muted me-1 align-self-center">Ativos:</small>
@@ -150,9 +148,13 @@
       {% elif filters.status == 'closed' %}
         <span class="badge text-bg-secondary">Finalizados</span>
       {% endif %}
-      {% if filters.category != 'all' %}
-        <span class="badge text-bg-warning text-dark">{{ filters.category|capitalize }}</span>
+      {% if filters.category_id != 'all' %}
+        {% set selected_category = (visitor_categories | selectattr('id', 'equalto', filters.category_id|int) | list | first) %}
+        {% if selected_category %}
+          {{ visitor_category.badge(selected_category) }}
+        {% endif %}
       {% endif %}
+
     </div>
     {% endif %}
 
@@ -211,11 +213,10 @@
               <div class="text-muted small">
                 <i class="bi bi-telephone"></i> {{ v.visitor.phone }}
               </div>
-              {% if v.visitor.category and v.visitor.category != 'civil' %}
-              <div class="small">
-                <span class="badge text-bg-warning text-dark">{{ v.visitor.category|capitalize }}</span>
+              <div class="small mt-1">
+                {{ visitor_category.badge(v.visitor.category) }}
               </div>
-              {% endif %}
+
             </td>
 
             <td>{{ v.destination }}</td>

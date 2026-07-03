@@ -3,14 +3,13 @@
 # Blueprint de Configurações Administrativas do SISPORT
 # =====================================================================
 
-# ─────────────────────────────────────────────────────────────────────
-# Imports
-# ─────────────────────────────────────────────────────────────────────
 from __future__ import annotations
 
 import json
 import os
 import shutil
+import re
+import unicodedata
 from datetime import datetime, timezone, timedelta
 
 from flask import (
@@ -25,6 +24,7 @@ from flask import (
     url_for,
 )
 from werkzeug.security import check_password_hash, generate_password_hash
+from sqlalchemy import func
 
 from app.extensions import db
 from app.models.settings import get_setting, set_setting
@@ -33,6 +33,15 @@ from app.models.visitor_destination import (
     VisitorDestinationGroup,
     VisitorDestinationPlace,
 )
+from app.models.visitor_category import (
+    VisitorCategory,
+    get_active_visitor_categories,
+    get_all_visitor_categories,
+    get_visitor_category_by_id,
+    get_visitor_category_by_value,
+    get_default_visitor_category,
+)
+
 from app.defaults import build_snapshot
 from app.paths import (
     BACKUP_DIR,
@@ -59,8 +68,8 @@ _EXPORTABLE_KEYS = [
     "inst_short_name",
     "header_line_1",
     "header_line_2",
-    "visitor_categories",
 ]
+
 
 
 # =====================================================================
@@ -231,6 +240,28 @@ def get_destination_group_items(group):
 
 
 # =====================================================================
+# Helpers — Categorias de Visitante
+# =====================================================================
+
+def _classes_from_color(color: str) -> tuple[str, str]:
+    """
+    Converte um nome de cor Bootstrap em (btn_class, badge_class).
+    Ex.: "success" -> ("btn-success", "bg-success")
+    """
+    color = (color or "").strip().lower()
+    if color in {"primary", "secondary", "success", "danger", "warning", "info", "dark", "light"}:
+        return f"btn-{color}", f"bg-{color}"
+    return "btn-outline-secondary", "bg-secondary"
+
+
+def _next_category_order() -> int:
+    max_order = db.session.query(
+        db.func.coalesce(db.func.max(VisitorCategory.sort_order), -1)
+    ).scalar()
+    return max_order + 1
+
+
+# =====================================================================
 # Rotas — Resetar configurações
 # =====================================================================
 
@@ -313,6 +344,23 @@ def settings_page(tab_key: str = "general"):
         current_tab = SETTINGS_TABS[0]
         tab_key = current_tab["key"]
 
+    visitor_categories_full = get_all_visitor_categories()
+
+    # ─────────────────────────────────────────────────────────
+    # Contagem de visitantes por categoria para o painel
+    # ─────────────────────────────────────────────────────────
+    count_rows = (
+        db.session.query(
+            Visitor.category_id,
+            func.count(Visitor.id),
+        )
+        .filter(Visitor.category_id.isnot(None))
+        .group_by(Visitor.category_id)
+        .all()
+    )
+
+    visitor_counts = {cat_id: total for cat_id, total in count_rows}
+
     return render_template(
         "admin/settings_page.html",
         tabs=SETTINGS_TABS,
@@ -320,7 +368,212 @@ def settings_page(tab_key: str = "general"):
         current_tab=current_tab,
         settings=settings,
         visitor_groups_flat=visitor_groups_flat,
+        visitor_categories_full=visitor_categories_full,
+        visitor_categories=visitor_categories_full,  # garante o nome esperado no template
+        visitor_counts=visitor_counts,
     )
+
+
+# =====================================================================
+# Rotas — CRUD de Categorias de Visitante
+# =====================================================================
+
+def slugify_category(text):
+    text = (text or "").strip().lower()
+
+    text = unicodedata.normalize("NFKD", text)
+    text = text.encode("ascii", "ignore").decode("ascii")
+
+    text = re.sub(r"[^a-z0-9]+", "-", text)
+    text = re.sub(r"-+", "-", text)
+    text = text.strip("-")
+
+    return text or "categoria"
+
+@admin_bp.post("/settings/visitor-categories/create")
+def create_visitor_category():
+    """Cria uma nova categoria de visitante."""
+    label = request.form.get("label", "").strip()
+    icon = request.form.get("icon", "").strip() or "bi-tag"
+
+    if not label:
+        flash("Informe o nome da categoria.", "warning")
+        return redirect(url_for("admin.settings_page", tab_key="visitors"))
+
+    # Preferir 'color' do form; se não vier, aceitar classes diretas
+    color = (request.form.get("color") or "").strip().lower()
+    default_btn, default_badge = _classes_from_color(color)
+
+    btn_class = (request.form.get("btn_class") or default_btn).strip()
+    badge_class = (request.form.get("badge_class") or default_badge).strip()
+
+    value = slugify_category(label)
+
+    if VisitorCategory.query.filter_by(value=value).first():
+        flash(f"Já existe uma categoria com o identificador '{value}'.", "warning")
+        return redirect(url_for("admin.settings_page", tab_key="visitors"))
+
+    cat = VisitorCategory(
+        value=value,
+        label=label,
+        icon=icon,
+        btn_class=btn_class or "btn-outline-secondary",
+        badge_class=badge_class or "bg-secondary",
+        sort_order=_next_category_order(),
+        is_active=True,
+    )
+    db.session.add(cat)
+    db.session.commit()
+
+    flash("Categoria criada com sucesso.", "success")
+    return redirect(url_for("admin.settings_page", tab_key="visitors"))
+
+
+@admin_bp.post("/settings/visitor-categories/<int:cat_id>/edit")
+def edit_visitor_category(cat_id: int):
+    """Edita uma categoria existente."""
+    cat = VisitorCategory.query.get_or_404(cat_id)
+
+    label = request.form.get("label", "").strip()
+    if not label:
+        flash("Informe o nome da categoria.", "warning")
+        return redirect(url_for("admin.settings_page", tab_key="visitors"))
+
+    cat.label = label
+    cat.icon = request.form.get("icon", "").strip() or "bi-tag"
+
+    color = (request.form.get("color") or "").strip().lower()
+    default_btn, default_badge = _classes_from_color(color)
+
+    cat.btn_class = (request.form.get("btn_class") or default_btn).strip() or "btn-outline-secondary"
+    cat.badge_class = (request.form.get("badge_class") or default_badge).strip() or "bg-secondary"
+    cat.is_active = bool(request.form.get("is_active"))
+
+    db.session.commit()
+    flash("Categoria atualizada.", "success")
+    return redirect(url_for("admin.settings_page", tab_key="visitors"))
+
+
+@admin_bp.route("/settings/visitor-categories/<int:cat_id>/toggle", methods=["POST"])
+def toggle_visitor_category(cat_id):
+    category = VisitorCategory.query.get_or_404(cat_id)
+
+    category.is_active = not category.is_active
+
+    db.session.commit()
+
+    if category.is_active:
+        flash("Categoria ativada com sucesso.", "success")
+    else:
+        flash("Categoria desativada com sucesso.", "success")
+
+    return redirect(url_for("admin.settings_page"))
+
+
+@admin_bp.post("/settings/visitor-categories/<int:cat_id>/delete")
+def delete_visitor_category(cat_id: int):
+    """
+    Deleta uma categoria.
+
+    Se houver visitantes vinculados:
+    - Com outras categorias disponíveis: exige target_category_id
+    - Sem outras categorias: bloqueia (ao menos a Civil deve existir)
+    """
+    cat = VisitorCategory.query.get_or_404(cat_id)
+
+    visitors_count = Visitor.query.filter_by(category_id=cat.id).count()
+
+    # ── Lista as outras categorias disponíveis ──
+    other_categories = (
+        VisitorCategory.query
+        .filter(VisitorCategory.id != cat.id)
+        .order_by(
+            VisitorCategory.sort_order.asc(),
+            VisitorCategory.label.asc(),
+        )
+        .all()
+    )
+
+    default_cat = get_default_visitor_category()
+
+    if visitors_count > 0:
+        if not other_categories:
+            flash(
+                f"Não é possível deletar a categoria '{cat.label}'. "
+                f"Ela possui {visitors_count} visitante(s) vinculado(s) "
+                f"e não há outra categoria para migrá-los. "
+                f"Cadastre uma nova categoria antes de excluir esta.",
+                "danger",
+            )
+            return redirect(url_for("admin.settings_page", tab_key="visitors"))
+
+        # ── Se só existe a categoria padrão como alternativa,
+        #     migra automaticamente ──
+        if len(other_categories) == 1:
+            target = other_categories[0]
+        else:
+            target_id = request.form.get("target_category_id", type=int)
+
+            if not target_id:
+                flash(
+                    "É necessário selecionar uma categoria de destino "
+                    "para migrar os visitantes vinculados.",
+                    "warning",
+                )
+                return redirect(url_for("admin.settings_page", tab_key="visitors"))
+
+            if target_id == cat.id:
+                flash(
+                    "A categoria de destino não pode ser a mesma "
+                    "que está sendo excluída.",
+                    "warning",
+                )
+                return redirect(url_for("admin.settings_page", tab_key="visitors"))
+
+            target = VisitorCategory.query.get(target_id)
+
+            if not target:
+                flash("Categoria de destino inválida.", "danger")
+                return redirect(url_for("admin.settings_page", tab_key="visitors"))
+
+        # ── Migra os visitantes ──
+        Visitor.query.filter_by(category_id=cat.id).update(
+            {"category_id": target.id}
+        )
+        db.session.flush()
+
+        db.session.delete(cat)
+        db.session.commit()
+
+        flash(
+            f"Categoria '{cat.label}' deletada. "
+            f"{visitors_count} visitante(s) migrado(s) "
+            f"para '{target.label}'.",
+            "success",
+        )
+        return redirect(url_for("admin.settings_page", tab_key="visitors"))
+
+    # ── Sem visitantes vinculados: exclusão direta ──
+    db.session.delete(cat)
+    db.session.commit()
+
+    flash(f"Categoria '{cat.label}' deletada.", "success")
+    return redirect(url_for("admin.settings_page", tab_key="visitors"))
+
+
+@admin_bp.post("/settings/visitor-categories/reorder")
+def reorder_visitor_categories():
+    """Reordena categorias (drag & drop via JSON)."""
+    data = request.get_json(silent=True) or {}
+    ordered_ids = data.get("ids", [])
+
+    for index, cat_id in enumerate(ordered_ids):
+        cat = VisitorCategory.query.get(cat_id)
+        if cat:
+            cat.sort_order = index
+
+    db.session.commit()
+    return jsonify({"success": True})
 
 
 # =====================================================================
@@ -707,17 +960,7 @@ def change_password():
 
 @admin_bp.post("/settings/visitors")
 def save_visitors():
-    """Salva categorias de visitante, campos obrigatórios e regras de visita."""
-    raw = request.form.get("visitor_categories", "") or request.form.get("categories_list", "")
-
-    cats = [
-        category.strip().lower()
-        for category in raw.replace("\n", ",").split(",")
-        if category.strip()
-    ]
-
-    set_setting("visitor_categories", ",".join(cats) if cats else "civil")
-
+    """Salva campos obrigatórios e regras de visita."""
     set_setting(
         "visitor_father_name_required",
         "1" if request.form.get("father_name_required") else "0",
@@ -730,8 +973,6 @@ def save_visitors():
         "visitor_empresa_required",
         "1" if request.form.get("empresa_required") else "0",
     )
-
-    # Novo: motivo da visita obrigatório/opcional
     set_setting(
         "visitor_visit_reason_required",
         "1" if (
@@ -905,7 +1146,7 @@ def export_settings():
     for key in _EXPORTABLE_KEYS:
         data[key] = get_setting(key, "")
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
     filename = f"sisport_config_{timestamp}.json"
     file_path = EXPORTS_DIR / filename
 
@@ -1006,7 +1247,9 @@ def export_visitors():
             "mom_name": visitor.mom_name,
             "phone": visitor.phone,
             "email": visitor.email,
-            "category": visitor.category,
+            "category_id": visitor.category_id,
+            "category_value": visitor.category.value if visitor.category else None,
+            "category_label": visitor.category.label if visitor.category else None,
             "photo_rel_path": visitor.photo_rel_path,
             "last_checkout_at": (
                 visitor.last_checkout_at.isoformat()
@@ -1081,6 +1324,26 @@ def import_visitors():
                 skipped += 1
                 continue
 
+            category = None
+
+            category_value = (
+                record.get("category_value")
+                or record.get("category")
+                or "civil"
+            )
+
+            category = get_visitor_category_by_value(category_value, active_only=False)
+
+            if not category:
+                category = get_default_visitor_category()
+
+            if not category:
+                raise ValueError(
+                    "Nenhuma categoria de visitante disponível. "
+                    "Cadastre pelo menos a categoria Civil."
+                )
+
+
             existing = Visitor.query.filter_by(
                 doc_type=doc_type,
                 doc_number=doc_number,
@@ -1097,9 +1360,11 @@ def import_visitors():
                 mom_name=record.get("mom_name", ""),
                 phone=record.get("phone", ""),
                 email=record.get("email", ""),
-                category=record.get("category", "civil"),
+                category_id=category.id,
                 photo_rel_path=record.get("photo_rel_path", ""),
             )
+
+
 
             last_checkout_at = record.get("last_checkout_at")
 

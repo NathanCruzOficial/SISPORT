@@ -182,7 +182,7 @@
 
   <header class="print-header">
     <div>
-      <h1 class="print-title">Dashboard Gerencial — SISPORT</h1>
+      <h1 class="print-title">Controle de Acessos ao QG Comdo GUEs/9ª Bda Inf Mtz - 7ª Seção</h1>
 
       <div class="print-subtitle">
         Período:
@@ -300,9 +300,17 @@
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
 <script>
+  // ── Gera cores distintas usando HSL (hue espaçado uniformemente) ──
+  function generateDistinctColors(count) {
+    const colors = [];
+    for (let i = 0; i < count; i++) {
+      const hue = (i * 360 / count) % 360;
+      colors.push(`hsl(${hue}, 55%, 45%)`);
+    }
+    return colors;
+  }
+
   // ── Plugin: exibe valores acima das colunas/pontos ──────────────
   const chartValueLabelPlugin = {
     id: "chartValueLabelPlugin",
@@ -324,6 +332,9 @@
           meta.data.forEach(function (arc, index) {
             const value = dataset.data[index];
             if (!value) return;
+
+            // Respeita a visibilidade do slice (quando o usuário oculta pela legenda)
+            if (!chart.getDataVisibility(index)) return;
 
             const angle      = (arc.startAngle + arc.endAngle) / 2;
             const outerRadius = arc.outerRadius + 18;
@@ -391,8 +402,6 @@
   const oliveDark = "#3F5222";
   const green     = "#198754";
   const blue      = "#0d6efd";
-  const yellow    = "#ffc107";
-  const gray      = "#6c757d";
 
   const visitsByMonthLabels   = {{ visits_by_month_labels   | tojson }};
   const visitsByMonthValues   = {{ visits_by_month_values   | tojson }};
@@ -495,7 +504,7 @@
       labels: categoryLabels,
       datasets: [{
         data: categoryValues,
-        backgroundColor: [blue, olive, yellow, gray],
+        backgroundColor: generateDistinctColors(categoryLabels.length),
         borderColor: "#ffffff",
         borderWidth: 2
       }]

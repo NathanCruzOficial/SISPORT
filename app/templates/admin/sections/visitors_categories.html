@@ -1,20 +1,380 @@
-<form method="post" action="{{ url_for('admin.save_visitors') }}">
+{% macro category_form_fields(color_presets, cat=None) %}
+  <div class="mb-3">
+    <label class="form-label small fw-semibold">Nome</label>
+    <input type="text" name="label" class="form-control"
+           value="{{ cat.label if cat else '' }}" required
+           placeholder="Ex: Prestador de Serviço">
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label small fw-semibold">Ícone (Bootstrap Icons)</label>
+    <div class="input-group">
+      <span class="input-group-text">
+        <i class="bi {{ cat.icon if cat else 'bi-tag' }}"></i>
+      </span>
+      <input type="text" name="icon" class="form-control font-monospace"
+             value="{{ cat.icon if cat else 'bi-tag' }}"
+             placeholder="bi-person">
+    </div>
+    <div class="form-text">
+      Veja os nomes em
+      <a href="https://icons.getbootstrap.com/" target="_blank">icons.getbootstrap.com</a>
+      Ex: bi-shield, bi-tools.
+    </div>
+  </div>
+
   <div class="mb-2">
-    <label class="form-label fw-semibold small">Categorias de Visitante</label>
-    <textarea name="visitor_categories" class="form-control font-monospace"
-              rows="4" placeholder="Uma por linha ou separadas por vírgula">{{ settings.visitor_categories_raw }}</textarea>
-    <div class="form-text">Separadas por vírgula ou uma por linha. Ex: civil, militar, ex-militar, prestador</div>
+    <label class="form-label small fw-semibold">Cor</label>
+
+    <div class="d-flex flex-wrap gap-2">
+      {% for name, btn, badge in color_presets %}
+      <label class="d-flex align-items-center gap-1 border rounded px-2 py-1" style="cursor:pointer">
+        <input type="radio"
+               name="color_combo"
+               value="{{ btn }}|{{ badge }}"
+               {% if (cat and cat.btn_class == btn) or (not cat and loop.first) %}checked{% endif %}>
+        <span class="badge {{ badge }}">{{ name }}</span>
+      </label>
+      {% endfor %}
+    </div>
   </div>
 
-  <div class="d-flex flex-wrap gap-1 mb-3">
-    {% for cat in settings.visitor_categories %}
-    <span class="badge text-bg-secondary">{{ cat }}</span>
-    {% endfor %}
-  </div>
+  <input type="hidden"
+         name="btn_class"
+         value="{{ cat.btn_class if cat else 'btn-outline-secondary' }}">
 
-  <div class="text-end">
-    <button type="submit" class="btn btn-primary btn-sm">
-      <i class="bi bi-check-lg me-1"></i>Salvar
+  <input type="hidden"
+         name="badge_class"
+         value="{{ cat.badge_class if cat else 'bg-secondary' }}">
+
+  {% if cat %}
+  <div class="form-check mt-3">
+    <input class="form-check-input"
+           type="checkbox"
+           name="is_active"
+           id="active{{ cat.id }}"
+           {% if cat.is_active %}checked{% endif %}>
+    <label class="form-check-label" for="active{{ cat.id }}">
+      Ativa
+    </label>
+  </div>
+  {% endif %}
+{% endmacro %}
+
+
+{% set color_presets = [
+  ('Cinza',    'btn-outline-secondary', 'bg-secondary'),
+  ('Verde',    'btn-outline-success',   'bg-success'),
+  ('Azul',     'btn-outline-primary',   'bg-primary'),
+  ('Amarelo',  'btn-outline-warning',   'bg-warning text-dark'),
+  ('Vermelho', 'btn-outline-danger',    'bg-danger'),
+  ('Ciano',    'btn-outline-info',      'bg-info text-dark'),
+  ('Escuro',   'btn-outline-dark',      'bg-dark'),
+] %}
+
+
+<div class="card border-0">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <label class="form-label fw-semibold mb-0">Categorias de Visitante</label>
+
+    <button type="button"
+            class="btn btn-success btn-sm"
+            data-bs-toggle="modal"
+            data-bs-target="#modalNovaCategoria">
+      <i class="bi bi-plus-lg me-1"></i>Nova
     </button>
   </div>
-</form>
+
+  <ul class="list-group" id="categoriesSortable">
+    {% for cat in visitor_categories_full %}
+    {% set cat_visitor_count = visitor_counts.get(cat.id, 0) %}
+    <li class="list-group-item d-flex align-items-center gap-2"
+        data-cat-id="{{ cat.id }}">
+
+      <i class="bi bi-grip-vertical text-muted" style="cursor:grab"></i>
+
+      <span class="badge {{ cat.badge_class }}">
+        <i class="bi {{ cat.icon }} me-1"></i>{{ cat.label }}
+      </span>
+
+      <code class="small text-muted ms-1">{{ cat.value }}</code>
+
+      {% if not cat.is_active %}
+        <span class="badge bg-light text-muted border">inativa</span>
+      {% endif %}
+
+      <span class="badge bg-light text-muted ms-1"
+            title="{{ cat_visitor_count }} visitante(s) nesta categoria">
+        <i class="bi bi-people me-1"></i>{{ cat_visitor_count }}
+      </span>
+
+      <div class="ms-auto d-flex gap-1">
+
+        <button type="button"
+                class="btn btn-outline-primary btn-sm"
+                data-bs-toggle="modal"
+                data-bs-target="#modalEditCat{{ cat.id }}">
+          <i class="bi bi-pencil"></i>
+        </button>
+
+        <form method="post"
+              class="d-inline"
+              action="{{ url_for('admin.toggle_visitor_category', cat_id=cat.id) }}">
+          <button class="btn btn-outline-secondary btn-sm"
+                  type="submit"
+                  title="{{ 'Desativar' if cat.is_active else 'Ativar' }}">
+            <i class="bi {{ 'bi-eye' if cat.is_active else 'bi-eye-slash' }}"></i>
+          </button>
+        </form>
+
+        {# ── Botão de deletar: abre modal ao invés de confirm simples ── #}
+        <button type="button"
+                class="btn btn-outline-danger btn-sm"
+                data-bs-toggle="modal"
+                data-bs-target="#modalDeleteCat{{ cat.id }}"
+                title="Deletar categoria">
+          <i class="bi bi-trash"></i>
+        </button>
+
+      </div>
+    </li>
+    {% else %}
+    <li class="list-group-item text-muted">
+      Nenhuma categoria cadastrada.
+    </li>
+    {% endfor %}
+  </ul>
+
+  <div class="form-text mt-2">
+    Arraste pelo <i class="bi bi-grip-vertical"></i> para reordenar.
+    A ordem define como aparecem no cadastro de visitantes.
+  </div>
+</div>
+
+
+<!-- Modal: Nova Categoria -->
+<div class="modal fade" id="modalNovaCategoria" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="post" action="{{ url_for('admin.create_visitor_category') }}">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Nova Categoria</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+
+        <div class="modal-body">
+          {{ category_form_fields(color_presets) }}
+        </div>
+
+        <div class="modal-footer">
+          <button class="btn btn-secondary" data-bs-dismiss="modal" type="button">
+            Cancelar
+          </button>
+          <button class="btn btn-success" type="submit">
+            Criar
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+
+<!-- Modais de edição -->
+{% for cat in visitor_categories_full %}
+<div class="modal fade" id="modalEditCat{{ cat.id }}" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="post" action="{{ url_for('admin.edit_visitor_category', cat_id=cat.id) }}">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Editar — {{ cat.label }}</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+
+        <div class="modal-body">
+          {{ category_form_fields(color_presets, cat) }}
+        </div>
+
+        <div class="modal-footer">
+          <button class="btn btn-secondary" data-bs-dismiss="modal" type="button">
+            Cancelar
+          </button>
+          <button class="btn btn-primary" type="submit">
+            Salvar
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+{% endfor %}
+
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- Modais de exclusão com migração                                    -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+{% for cat in visitor_categories_full %}
+{% set cat_visitor_count = visitor_counts.get(cat.id, 0) %}
+
+{# ── Lista outras categorias para onde migrar ── #}
+{% set other_cats = [] %}
+{% for c in visitor_categories_full %}
+  {% if c.id != cat.id %}
+    {% set _ = other_cats.append(c) %}
+  {% endif %}
+{% endfor %}
+
+<div class="modal fade" id="modalDeleteCat{{ cat.id }}" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="post"
+          action="{{ url_for('admin.delete_visitor_category', cat_id=cat.id) }}">
+      <div class="modal-content">
+        <div class="modal-header bg-danger text-white">
+          <h5 class="modal-title">
+            <i class="bi bi-exclamation-triangle me-2"></i>
+            Deletar Categoria
+          </h5>
+          <button type="button"
+                  class="btn-close btn-close-white"
+                  data-bs-dismiss="modal"></button>
+        </div>
+
+        <div class="modal-body">
+
+          {% if cat_visitor_count > 0 %}
+
+            <div class="alert alert-warning mb-3">
+              <i class="bi bi-people-fill me-2"></i>
+              A categoria <strong>{{ cat.label }}</strong> está vinculada a
+              <strong>{{ cat_visitor_count }}</strong> visitante(s).
+            </div>
+
+            {% if other_cats|length == 1 %}
+              {# ── Só uma alternativa: migração automática ── #}
+              {% set default_cat = other_cats[0] %}
+              <p class="mb-0">
+                Como só existe <strong>{{ default_cat.label }}</strong>
+                como alternativa, os {{ cat_visitor_count }} visitante(s)
+                serão migrados automaticamente para
+                <span class="badge {{ default_cat.badge_class }}">
+                  <i class="bi {{ default_cat.icon }} me-1"></i>
+                  {{ default_cat.label }}
+                </span>.
+              </p>
+              <input type="hidden"
+                     name="target_category_id"
+                     value="{{ default_cat.id }}">
+
+            {% elif other_cats|length > 1 %}
+              {# ── Várias alternativas: dropdown de seleção ── #}
+              <p class="mb-2">
+                Para prosseguir, selecione para qual categoria os
+                <strong>{{ cat_visitor_count }}</strong> visitante(s)
+                serão migrados:
+              </p>
+
+              <select name="target_category_id"
+                      class="form-select"
+                      required>
+                <option value="" disabled selected>
+                  Selecione uma categoria...
+                </option>
+                {% for target in other_cats %}
+                <option value="{{ target.id }}">
+                  {{ target.label }}
+                  {% set tcount = visitor_counts.get(target.id, 0) %}
+                  ({{ tcount }} visitante(s))
+                </option>
+                {% endfor %}
+              </select>
+
+            {% else %}
+              {# ── Nenhuma alternativa: bloqueio (não deve chegar aqui
+                   pois o backend também barra) ── #}
+              <div class="alert alert-danger mb-0">
+                Não há outra categoria disponível para migrar os visitantes.
+                Cadastre uma nova categoria antes de excluir esta.
+              </div>
+            {% endif %}
+
+          {% else %}
+
+            <p class="mb-0">
+              A categoria <strong>{{ cat.label }}</strong> não possui
+              visitantes vinculados. Deseja realmente deletá-la?
+            </p>
+
+          {% endif %}
+
+        </div>
+
+        <div class="modal-footer">
+          <button type="button"
+                  class="btn btn-secondary"
+                  data-bs-dismiss="modal">
+            Cancelar
+          </button>
+
+          {% if cat_visitor_count > 0 and other_cats|length == 0 %}
+            {# ── Sem saída: botão desabilitado ── #}
+            <button type="submit" class="btn btn-danger" disabled>
+              <i class="bi bi-trash me-1"></i>Deletar
+            </button>
+          {% else %}
+            <button type="submit" class="btn btn-danger">
+              <i class="bi bi-trash me-1"></i>
+              Deletar e migrar
+            </button>
+          {% endif %}
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+{% endfor %}
+
+
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('input[name="color_combo"]').forEach(radio => {
+    radio.addEventListener('change', e => {
+      const form = e.target.closest('form');
+      const [btn, badge] = e.target.value.split('|');
+
+      const btnInput = form.querySelector('input[name="btn_class"]');
+      const badgeInput = form.querySelector('input[name="badge_class"]');
+
+      if (btnInput) {
+        btnInput.value = btn;
+      }
+
+      if (badgeInput) {
+        badgeInput.value = badge;
+      }
+    });
+  });
+
+  const list = document.getElementById('categoriesSortable');
+
+  if (list && window.Sortable) {
+    Sortable.create(list, {
+      handle: '.bi-grip-vertical',
+      animation: 150,
+      onEnd: () => {
+        const ids = [...list.querySelectorAll('[data-cat-id]')]
+          .map(li => parseInt(li.dataset.catId));
+
+        fetch("{{ url_for('admin.reorder_visitor_categories') }}", {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ ids })
+        });
+      }
+    });
+  }
+});
+</script>

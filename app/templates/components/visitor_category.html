@@ -1,0 +1,93 @@
+{# =====================================================================
+   components/visitor_category.html
+   Macros padronizados para exibir e selecionar categoria de visitante.
+   Compatível com o novo modelo relacional:
+   Visitor.category_id -> VisitorCategory.id
+   Visitor.category    -> objeto VisitorCategory
+   ===================================================================== #}
+
+
+{# ─────────────────────────────────────────────────────────────────────
+   Badge visual da categoria
+   Uso:
+   {{ visitor_category.badge(visitor.category) }}
+   {{ visitor_category.badge(visitor.category, "fs-6") }}
+   ───────────────────────────────────────────────────────────────────── #}
+{% macro badge(category=None, extra_classes='') -%}
+  {% set badge_class = category.badge_class if category and category.badge_class else 'bg-secondary' %}
+  {% set icon        = category.icon        if category and category.icon        else 'bi-person' %}
+  {% set label       = category.label       if category and category.label       else 'Civil' %}
+
+  <span class="badge {{ badge_class }} {{ extra_classes }}">
+    <i class="bi {{ icon }} me-1"></i>{{ label }}
+  </span>
+{%- endmacro %}
+
+
+{# ─────────────────────────────────────────────────────────────────────
+   Grupo de radios para edição/cadastro
+   O value enviado é category_id, ou seja, c.id.
+   Uso:
+   {{ visitor_category.radio_selector(visitor_categories, visitor.category_id) }}
+   ───────────────────────────────────────────────────────────────────── #}
+{% macro radio_selector(categories=None, selected_id=None, field_name='category_id', prefix='cat') -%}
+  {% set cats = categories or [] %}
+
+  {% if cats and cats|length > 0 %}
+    {% set ids = cats|map(attribute='id')|list %}
+
+    {# Se selected_id não existe mais, seleciona a primeira categoria disponível #}
+    {% set selected = selected_id %}
+    {% if selected not in ids %}
+      {% set selected = cats[0].id %}
+    {% endif %}
+
+    <div class="d-flex flex-wrap gap-2 pt-1">
+      {% for c in cats %}
+        {% set input_id = prefix ~ '-' ~ c.id %}
+        {% set btn_cls = c.btn_class if c.btn_class else 'btn-outline-secondary' %}
+        {% set icon = c.icon if c.icon else 'bi-tag' %}
+
+        <input type="radio"
+               class="btn-check"
+               name="{{ field_name }}"
+               id="{{ input_id }}"
+               value="{{ c.id }}"
+               {% if selected|string == c.id|string %}checked{% endif %}
+               autocomplete="off">
+
+        <label class="btn {{ btn_cls }} btn-sm px-3" for="{{ input_id }}">
+          <i class="bi {{ icon }} me-1"></i>{{ c.label }}
+        </label>
+      {% endfor %}
+    </div>
+  {% else %}
+    {# Sem categorias cadastradas: não envia string em category_id #}
+    <input type="hidden" name="{{ field_name }}" value="">
+    <div class="d-flex align-items-center gap-2 pt-1">
+      {{ badge(None) }}
+      <span class="text-muted small">(padrão)</span>
+    </div>
+  {% endif %}
+{%- endmacro %}
+
+
+{# ─────────────────────────────────────────────────────────────────────
+   Select dinâmico para filtro de relatório
+   Uso:
+   {{ visitor_category.filter_select(visitor_categories, filters.category_id) }}
+   ───────────────────────────────────────────────────────────────────── #}
+{% macro filter_select(categories=None, selected='all', field_name='category_id') -%}
+  {% set cats = categories or [] %}
+
+  <select name="{{ field_name }}" class="form-select form-select-sm">
+    <option value="all" {{ 'selected' if selected == 'all' }}>Todas</option>
+
+    {% for c in cats %}
+      <option value="{{ c.id }}"
+              {{ 'selected' if selected|string == c.id|string }}>
+        {{ c.label }}
+      </option>
+    {% endfor %}
+  </select>
+{%- endmacro %}

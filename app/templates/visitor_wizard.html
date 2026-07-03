@@ -9,7 +9,7 @@
 <div class="center-card">
   <div class="card-body">
 
-    {# ── Cabeçalho ──────────────────────────────────────────────── #}
+    <!-- Cabeçalho -->
     <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-start gap-2 mb-3">
       <div>
         <h1 class="h4 mb-1">Novo Visitante</h1>
@@ -20,7 +20,7 @@
       </a>
     </div>
 
-    {# ── Stepper Visual ─────────────────────────────────────────── #}
+    <!-- Stepper Visual -->
     <div class="mb-4">
       <div class="d-flex flex-wrap gap-2">
         <div class="badge rounded-pill px-3 py-2 {% if wizard.step == 1 %}text-bg-success{% elif wizard.step > 1 %}text-bg-secondary{% else %}text-bg-light{% endif %}">
@@ -40,10 +40,6 @@
       </div>
     </div>
 
-
-    {# ═════════════════════════════════════════════════════════════
-       ETAPA 1 — Dados Pessoais + Categoria
-       ═════════════════════════════════════════════════════════════ #}
     {% if wizard.step == 1 %}
     <div class="sheet">
       <div class="sheet-header">
@@ -58,7 +54,6 @@
         <form method="post" action="{{ url_for('visitor.wizard_step1') }}">
           <div class="row g-3">
 
-            {# ── Nome + Categoria (lado a lado) ─────────────────── #}
             <div class="col-12 col-md-8">
               <label class="form-label">Nome completo <span class="text-danger">*</span></label>
               <input class="form-control form-control-lg text-uppercase"
@@ -76,13 +71,13 @@
                 {% for category in visitor_categories %}
                   <input type="radio"
                         class="btn-check"
-                        name="category"
+                        name="category_id"
                         id="cat-{{ category.value }}"
                         value="{{ category.value }}"
                         {% if cat == category.value %}checked{% elif loop.first %}checked{% endif %}
                         autocomplete="off">
 
-                  <label class="btn {{ category.btn_class }} btn-sm px-3"
+                  <label class="btn {{ category.btn_class or 'btn-outline-secondary' }} btn-sm px-3"
                         for="cat-{{ category.value }}">
                     <i class="bi {{ category.icon }} me-1"></i>
                     {{ category.label }}
@@ -91,8 +86,6 @@
               </div>
             </div>
 
-
-            {# ── Filiação ────────────────────────────────────────── #}
             <div class="col-12 col-md-6">
               <label class="form-label">Nome da Mãe <span class="text-danger">*</span></label>
               <input class="form-control form-control-lg text-uppercase"
@@ -109,7 +102,6 @@
                      placeholder="">
             </div>
 
-            {# ── CPF + Celular ───────────────────────────────────── #}
             <div class="col-12 col-md-6">
               <label class="form-label">CPF <span class="text-danger">*</span></label>
               <input class="form-control form-control-lg"
@@ -130,7 +122,6 @@
                      placeholder="(DDD) 0 0000-0000">
             </div>
 
-            {# ── E-mail + Empresa ────────────────────────────────── #}
             <div class="col-12 col-md-6">
               <label class="form-label">E-mail</label>
               <input class="form-control form-control-lg text-lowercase"
@@ -147,7 +138,6 @@
                      placeholder="">
             </div>
 
-            {# ── Botões ──────────────────────────────────────────── #}
             <div class="col-12 d-flex justify-content-end gap-2 pt-2">
               <div class="form-text">O (*) indica um campo obrigatório.</div>
               <a class="btn btn-outline-secondary" href="{{ url_for('visitor.identify') }}">Cancelar</a>
@@ -161,10 +151,6 @@
     </div>
     {% endif %}
 
-
-    {# ═════════════════════════════════════════════════════════════
-       ETAPA 2 — Foto + Confirmação dos Dados
-       ═════════════════════════════════════════════════════════════ #}
     {% if wizard.step == 2 %}
     <div class="sheet">
       <div class="sheet-header">
@@ -183,7 +169,6 @@
 
           <input type="hidden" name="photo_data_url" id="photo_data_url">
 
-          {# ── Câmera centralizada ──────────────────────────────── #}
           <div class="mx-auto text-center" style="max-width: 420px;" data-camera="1">
 
             <div id="camera-container"
@@ -227,7 +212,6 @@
             </button>
           </div>
 
-          {# ── Botões de navegação ────────────────────────────────── #}
           <div class="d-flex gap-2 mt-4">
             <a class="btn btn-outline-secondary btn-lg flex-fill py-2"
                href="{{ url_for('visitor.wizard_back', step=1) }}">
@@ -251,10 +235,6 @@
     </div>
     {% endif %}
 
-
-    {# ═════════════════════════════════════════════════════════════
-       ETAPA 3 — Resumo Completo (Card) + Local/Destino
-       ═════════════════════════════════════════════════════════════ #}
     {% if wizard.step == 3 %}
     <div class="sheet">
       <div class="sheet-header">
@@ -267,7 +247,6 @@
 
       <div class="p-3 p-md-4">
 
-        {# ═══ CARTEIRA DO VISITANTE — Confirmação ═══ #}
         <div class="id-card mb-4">
 
           <div class="id-card-header">
@@ -284,7 +263,6 @@
 
             <div class="d-flex flex-column flex-sm-row gap-3 align-items-center align-items-sm-start">
 
-              {# Foto 1:1 #}
               <div class="text-center flex-shrink-0">
                 <div class="photo-box mx-auto" style="width:150px;height:150px;border-radius:8px;">
                   {% if wizard.temp_photo_id %}
@@ -298,7 +276,6 @@
                   {% endif %}
                 </div>
 
-                {# ── Badge da categoria selecionada (dinâmico) ── #}
                 {% set cat = wizard.category|default('civil') %}
                 {% set selected_category = namespace(
                   label=cat,
@@ -320,7 +297,6 @@
                 </span>
               </div>
 
-              {# Dados de identificação #}
               <div class="flex-grow-1 w-100">
 
                 <div class="border-bottom pb-2 mb-3">
@@ -372,7 +348,6 @@
           </div>
         </div>
 
-        {# ── Formulário de destino ──────────────────────────────── #}
         <form method="post"
               action="{{ url_for('visitor.wizard_finish') }}"
               data-requires-destination="1">
@@ -402,7 +377,6 @@
                       placeholder="Ex: Reunião, entrega de documento, manutenção, atendimento..."></textarea>
           </div>
 
-          {# ── Botões de ação ────────────────────────────────────── #}
           <div class="d-flex gap-2 mt-4">
             <a class="btn btn-outline-secondary btn-lg flex-fill py-2"
                href="{{ url_for('visitor.wizard_back', step=2) }}">
