@@ -241,6 +241,35 @@
       gap: 4px;
     }
 
+    /* ── Coluna de registro compacta (3 linhas) ─────────────────── */
+    .reg-col { width: 175px; text-align: center; }
+    .reg-cell {
+      font-family: "Courier New", Courier, monospace;
+      font-size: 9.5px;
+      line-height: 1.35;
+      padding: 2px 6px;
+    }
+    .reg-cell .reg-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 4px;
+    }
+    .reg-cell .reg-label {
+      color: #555;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .reg-cell .reg-value {
+      text-align: right;
+      white-space: nowrap;
+    }
+    .reg-cell .reg-duracao {
+      font-weight: 700;
+      border-top: 1px dotted #999;
+      margin-top: 1px;
+      padding-top: 1px;
+    }
+
     /* ── Bloco de Conferência ──────────────────────────────────── */
     .conf-block{
       width: 100%;
@@ -309,15 +338,29 @@
   <!-- ── Barra de Ações (somente tela) ─────────────────────────── -->
   <div class="topbar no-print">
     <a class="btn btn-outline-dark"
-       href="{{ url_for('visitor.report_page', **filters) }}">← Voltar ao relatório</a>
-    <button class="btn btn-outline-gray" onclick="window.print()">🖨 Imprimir</button>
+       href="{{ url_for('visitor.report_page', **filters) }}">
+       ← Voltar ao relatório
+    </a>
+    <button class="btn btn-outline-gray" onclick="window.print()">
+      🖨 Imprimir
+    </button>
   </div>
 
   <!-- ── Cabeçalho Institucional ───────────────────────────────── -->
+  {% set inst_name = app_settings.get('inst_name', '') %}
+  {% set header_l1 = app_settings.get('header_line_1', '') %}
+  {% set header_l2 = app_settings.get('header_line_2', '') %}
+
   <div class="doc-header">
-    <div class="inst-line">Ministério da Defesa</div>
-    <div class="inst-line">Exército Brasileiro</div>
-    <div class="inst-line">Grupamento de Unidades Escola / 9ª Brigada de Infantaria Motorizada</div>
+    {% if header_l1 %}
+      <div class="inst-line">{{ header_l1 }}</div>
+    {% endif %}
+    {% if header_l2 %}
+      <div class="inst-line">{{ header_l2 }}</div>
+    {% endif %}
+    {% if inst_name %}
+      <div class="inst-line">{{ inst_name }}</div>
+    {% endif %}
     <div class="doc-title">Registro de entrada e saída de visitantes</div>
   </div>
 
@@ -363,7 +406,8 @@
   </div>
 
   <!-- ── Filtros Aplicados ─────────────────────────────────────── -->
-  {% set has_filters = filters.search or filters.status != 'all' or filters.category != 'all' %}
+  {% set has_filters = filters.search or filters.status != 'all'
+        or filters.category_id != '' %}
   {% if has_filters %}
   <div class="doc-filters">
     <span style="font-weight:700;">Filtros:</span>
@@ -384,10 +428,10 @@
         <span class="filter-value">Finalizados</span>
       </span>
     {% endif %}
-    {% if filters.category != 'all' %}
+    {% if filters.category_id != '' %}
       <span class="filter-item">
         <span class="filter-label">Categoria:</span>
-        <span class="filter-value">{{ filters.category | capitalize }}</span>
+        <span class="filter-value">ID {{ filters.category_id }}</span>
       </span>
     {% endif %}
   </div>
@@ -421,13 +465,12 @@
     <thead>
       <tr>
         <th class="status-col center"></th>
-        <th class="time-col center">Entrada</th>
-        <th class="time-col center">Saída</th>
-        <th class="dur-col center">Tempo</th>
         <th>Nome</th>
-        <th class="dur-col center">Telefone</th>
         <th class="cpf-col center">CPF</th>
+        <th class="dur-col center">Telefone</th>
         <th>Destino</th>
+        <th class="reg-col center">Registro</th>
+        <th>Categoria</th>
       </tr>
     </thead>
 
@@ -436,30 +479,53 @@
       <tr>
         <td class="status-col">
           {% if not v.check_out %}
-            <span class="status-icon status-open" title="Ainda no aquartelamento">✗</span>
+            <span class="status-icon status-open"
+                  title="Ainda no aquartelamento">✗</span>
           {% else %}
-            <span class="status-icon status-closed" title="Finalizado">✓</span>
+            <span class="status-icon status-closed"
+                  title="Finalizado">✓</span>
           {% endif %}
         </td>
-
-        <td class="mono center">{{ v.check_in.strftime("%H:%M:%S") }}</td>
-        <td class="mono center">{% if v.check_out %}{{ v.check_out.strftime("%H:%M:%S") }}{% else %}--{% endif %}</td>
-        <td class="mono center">{{ dur_hms(v.check_in, v.check_out) }}</td>
 
         <td>
           <div class="name-wrap">
             {% if not v.check_out %}
-              <span class="open-icon" title="Ainda não se retirou">!!</span>
+              <span class="open-icon" title="Ainda não se retirou">
+                !!
+              </span>
             {% else %}
-              <span class="open-icon" style="visibility:hidden;">!!</span>
+              <span class="open-icon" style="visibility:hidden;">
+                !!
+              </span>
             {% endif %}
             <span>{{ v.visitor.name }}</span>
           </div>
         </td>
 
-        <td class="mono center">{{ v.visitor.phone }}</td>
         <td class="mono center">{{ v.visitor.cpf }}</td>
+        <td class="mono center">{{ v.visitor.phone }}</td>
         <td>{{ v.destination }}</td>
+
+        <td class="reg-cell">
+          <div class="reg-row">
+            <span class="reg-label">Entrada:</span>
+            <span class="reg-value">{{ v.check_in.strftime("%d/%m/%Y %H:%M") }}</span>
+          </div>
+          <div class="reg-row">
+            <span class="reg-label">Saída:</span>
+            <span class="reg-value">
+              {% if v.check_out %}
+                {{ v.check_out.strftime("%d/%m/%Y %H:%M") }}
+              {% else %}—{% endif %}
+            </span>
+          </div>
+          <div class="reg-row reg-duracao">
+            <span class="reg-label">Permanência:</span>
+            <span class="reg-value">{{ dur_hms(v.check_in, v.check_out) }}</span>
+          </div>
+        </td>
+
+        <td>{{ v.visitor.category.label or '—' }}</td>
       </tr>
       {% endfor %}
     </tbody>
@@ -467,7 +533,8 @@
 
   <!-- ── Bloco vazio ───────────────────────────────────────────── -->
   {% if visits|length == 0 %}
-  <div style="text-align:center; padding: 20px 0; font-size: 13px; color: #888;">
+  <div style="text-align:center; padding: 20px 0; font-size: 13px;
+              color: #888;">
     Nenhuma visita encontrada para os filtros selecionados.
   </div>
   {% endif %}
@@ -508,22 +575,20 @@
 
   <!-- ── Indicador de preview (somente tela) ───────────────────── -->
   <div class="page-indicator no-print">
-    📄 {{ visits|length }} visitas | Impressão: ~{{ (visits|length // 25) + 1 }} página(s)
+    📄 {{ visits|length }} visitas | Impressão:
+    ~{{ (visits|length // 25) + 1 }} página(s)
   </div>
 
-  <!-- ── Auto-print quando aberto via botão + fallback generated_at ── -->
+  <!-- ── Auto-print quando aberto via botão + fallback ─────────── -->
   <script>
     // Fallback generated_at
-      (function(){
-        const el = document.getElementById("generatedAt");
-        if(!el) return;
-
-        const d = new Date();
-        const pad = (n) => String(n).padStart(2,'0');
-
-        el.textContent = `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-      })();
-
+    (function(){
+      const el = document.getElementById("generatedAt");
+      if(!el) return;
+      const d = new Date();
+      const pad = (n) => String(n).padStart(2,'0');
+      el.textContent = `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    })();
 
     // Auto-print: se foi aberto via window.open(), imprime automaticamente
     (function(){
