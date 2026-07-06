@@ -66,21 +66,31 @@ def _active_categories():
 
 def _resolve_category_id_from_form(field_name: str = "category_id") -> int:
     """
-    Lê e valida category_id vindo do formulário.
+    Lê category_id do formulário.
 
-    Aceita apenas categoria ativa.
+    Aceita tanto o ID numérico (2) quanto o value textual ("militar").
     """
-    category_id = request.form.get(field_name, type=int)
+    raw = (request.form.get(field_name) or "").strip()
 
-    category = get_visitor_category_by_id(
-        category_id,
-        active_only=True,
-    )
+    if not raw:
+        raise ValueError("Categoria não informada.")
 
-    if not category:
-        raise ValueError("Categoria inválida ou inativa.")
+    # 1. Tenta como ID numérico
+    try:
+        category_id = int(raw)
+        category = get_visitor_category_by_id(category_id, active_only=True)
+        if category:
+            return category.id
+    except (ValueError, TypeError):
+        pass
 
-    return category.id
+    # 2. Tenta como value textual ("civil", "militar", etc.)
+    category = get_visitor_category_by_value(raw, active_only=True)
+    if category:
+        return category.id
+
+    raise ValueError(f"Categoria inválida ou inativa: {raw}")
+
 
 
 def _resolve_category_filter_id() -> int | None:
@@ -1072,23 +1082,64 @@ def report_page():
     else:
         title = f"Relatório — {dt_from.strftime('%d/%m/%Y')} a {dt_to.strftime('%d/%m/%Y')}"
 
-    return render_template(
-    "report_page.html",
-    visits=visits,
-    title=title,
-    filters=filters,
-    total=len(visits),
-    open_count=open_ct,
-    closed_count=closed_ct,
-    visitor_categories=_active_categories(),
-)
+    # ── Data do primeiro registro (para atalho "Todo o período") ──
+    first_visit_dt = (
+        db.session.query(db.func.min(Visit.check_in))
+        .scalar()
+    )
+    first_visit_date = (
+        first_visit_dt.date().strftime("%Y-%m-%d")
+        if first_visit_dt
+        else today.strftime("%Y-%m-%d")
+    )
 
+    # ── Anos disponíveis (para atalhos de ano) ──
+    year_rows = (
+        db.session.query(db.extract("year", Visit.check_in))
+        .filter(Visit.check_in.isnot(None))
+        .distinct()
+        .all()
+    )
+    available_years = sorted(
+        {int(row[0]) for row in year_rows if row[0] is not None},
+        reverse=True,
+    )
+
+    # ── Configurações da instituição (para cabeçalho de impressão) ──
+    app_settings = {
+        "inst_name": get_setting("inst_name", ""),
+        "inst_short_name": get_setting("inst_short_name", ""),
+        "header_line_1": get_setting("header_line_1", ""),
+        "header_line_2": get_setting("header_line_2", ""),
+    }
+
+    return render_template(
+        "report_page.html",
+        visits=visits,
+        title=title,
+        filters=filters,
+        total=len(visits),
+        open_count=open_ct,
+        closed_count=closed_ct,
+        visitor_categories=_active_categories(),
+        first_visit_date=first_visit_date,
+        available_years=available_years,
+        app_settings=app_settings,
+    )
 
 
 @visitor_bp.route("/report/print", methods=["GET"])
 def report_print():
     """Versão para impressão do relatório."""
     visits, filters, dt_from, dt_to, open_count, closed_count = _build_report_query()
+
+    # ── Configurações da instituição (para cabeçalho de impressão) ──
+    app_settings = {
+        "inst_name": get_setting("inst_name", ""),
+        "inst_short_name": get_setting("inst_short_name", ""),
+        "header_line_1": get_setting("header_line_1", ""),
+        "header_line_2": get_setting("header_line_2", ""),
+    }
 
     return render_template(
         "print.html",
@@ -1098,20 +1149,9 @@ def report_print():
         filters=filters,
         open_count=open_count,
         closed_count=closed_count,
+        app_settings=app_settings,
     )
 
-@visitor_bp.route("/report/today", methods=["GET"])
-def report_today():
-    """Redireciona para o relatório filtrado por hoje."""
-    today = date.today().strftime("%Y-%m-%d")
-    return redirect(url_for("visitor.report_page", date_from=today, date_to=today))
-
-
-@visitor_bp.route("/report/today/print")
-def report_today_print():
-    """Redireciona para impressão com filtro de hoje."""
-    today = date.today().strftime("%Y-%m-%d")
-    return redirect(url_for("visitor.report_print", date_from=today, date_to=today))
 
 # ─────────────────────────────────────────────────────────────────────
 # Helper — Query de relatório com filtros (compartilhada)
@@ -1127,7 +1167,6 @@ def _build_report_query():
     search    = request.args.get("search", "").strip()
     status    = request.args.get("status", "all")
     category_id = _resolve_category_filter_id()
-
 
     today = date.today()
     try:
@@ -1158,17 +1197,38 @@ def _build_report_query():
     if category_id:
         query = query.filter(Visitor.category_id == category_id)
 
-
+    # ─────────────────────────────────────────────────────────────
+    # Busca fuzzy / aproximada
+    #
+    # Estratégia:
+    # - CPF: normaliza removendo pontos, traços e espaços antes
+    #         de comparar (ex.: "197.807.987-73" ↔ "19780798773")
+    # - Nome / destino / telefone: usa ILIKE (case‑insensitive)
+    #   cobrindo, por exemplo, "mendonça" ↔ "MENDONCA"
+    # ─────────────────────────────────────────────────────────────
     if search:
         like = f"%{search}%"
-        query = query.filter(
-            db.or_(
-                Visitor.name.ilike(like),
-                Visitor.cpf.like(like),
-                Visit.destination.ilike(like),
-                Visitor.phone.like(like),
+
+        conditions = [
+            Visitor.name.ilike(like),
+            Visit.destination.ilike(like),
+            Visitor.phone.ilike(like),
+        ]
+
+        # CPF normalizado: ignora tudo que não for dígito
+        cpf_digits = "".join(ch for ch in search if ch.isdigit())
+
+        if cpf_digits:
+            # Substitui caracteres não numéricos do CPF no banco
+            # para comparar apenas os dígitos
+            cpf_clean = db.func.replace(
+                db.func.replace(db.func.replace(Visitor.cpf, ".", ""), "-", ""), " ", ""
             )
-        )
+            conditions.append(cpf_clean.like(f"%{cpf_digits}%"))
+        else:
+            conditions.append(Visitor.cpf.ilike(like))
+
+        query = query.filter(db.or_(*conditions))
 
     visits = query.order_by(Visit.check_in.desc()).all()
 
@@ -1182,8 +1242,7 @@ def _build_report_query():
         "date_to_fmt":   dt_to.strftime("%d/%m/%Y"),
         "search":        search,
         "status":        status,
-        "category_id": category_id or "",
-
+        "category_id":   category_id or "",
     }
 
     return visits, filters, dt_from, dt_to, open_count, closed_count

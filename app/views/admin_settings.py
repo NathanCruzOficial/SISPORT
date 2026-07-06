@@ -440,6 +440,7 @@ def edit_visitor_category(cat_id: int):
         return redirect(url_for("admin.settings_page", tab_key="visitors"))
 
     cat.label = label
+    cat.value = slugify_category(label)
     cat.icon = request.form.get("icon", "").strip() or "bi-tag"
 
     color = (request.form.get("color") or "").strip().lower()

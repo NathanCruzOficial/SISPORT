@@ -1,4 +1,4 @@
-"""migrate visitor category string to category id
+"""migrate visitor category string to category id (idempotent)
 
 Revision ID: 8a18b4d90630
 Revises: d3cb0ac9d94d
@@ -17,19 +17,25 @@ branch_labels = None
 depends_on = None
 
 
+def _visitor_columns(bind):
+    """Retorna um set com os nomes das colunas atuais de visitors."""
+    return {
+        row[1]
+        for row in bind.execute(text("PRAGMA table_info(visitors)")).fetchall()
+    }
+
+
 def upgrade():
     bind = op.get_bind()
 
     # ------------------------------------------------------------------
     # 0. Limpeza preventiva caso uma tentativa anterior tenha falhado
     # ------------------------------------------------------------------
-
     bind.execute(text("DROP TABLE IF EXISTS _alembic_tmp_visitors"))
 
     # ------------------------------------------------------------------
     # 1. Garante categorias padrão obrigatórias
     # ------------------------------------------------------------------
-
     default_categories = [
         {
             "value": "civil",
@@ -61,25 +67,17 @@ def upgrade():
     ]
 
     for category in default_categories:
-        existing_category = bind.execute(
-            text("""
-                SELECT id
-                FROM visitor_categories
-                WHERE value = :value
-                LIMIT 1
-            """),
+        existing = bind.execute(
+            text("SELECT id FROM visitor_categories WHERE value = :value LIMIT 1"),
             {"value": category["value"]},
         ).fetchone()
 
-        if existing_category:
+        if existing:
             bind.execute(
                 text("""
                     UPDATE visitor_categories
-                    SET label = :label,
-                        icon = :icon,
-                        btn_class = :btn_class,
-                        badge_class = :badge_class,
-                        sort_order = :sort_order,
+                    SET label = :label, icon = :icon, btn_class = :btn_class,
+                        badge_class = :badge_class, sort_order = :sort_order,
                         is_active = :is_active
                     WHERE value = :value
                 """),
@@ -89,100 +87,64 @@ def upgrade():
             bind.execute(
                 text("""
                     INSERT INTO visitor_categories
-                    (
-                        value,
-                        label,
-                        icon,
-                        btn_class,
-                        badge_class,
-                        sort_order,
-                        is_active
-                    )
-                    VALUES
-                    (
-                        :value,
-                        :label,
-                        :icon,
-                        :btn_class,
-                        :badge_class,
-                        :sort_order,
-                        :is_active
-                    )
+                        (value, label, icon, btn_class, badge_class, sort_order, is_active)
+                    VALUES (:value, :label, :icon, :btn_class, :badge_class, :sort_order, :is_active)
                 """),
                 category,
             )
 
     # ------------------------------------------------------------------
-    # 2. Adiciona a nova coluna category_id sem recriar a tabela
+    # 2. Adiciona a nova coluna category_id (se ainda não existir)
     # ------------------------------------------------------------------
-    # Importante:
-    # Não usamos batch_alter_table aqui porque a tabela antiga tem:
-    # category TEXT(30) DEFAULT (civil) NOT NULL
-    # e o SQLite rejeita esse default ao recriar a tabela.
+    existing_cols = _visitor_columns(bind)
 
-    existing_visitor_columns = {
-        row[1]
-        for row in bind.execute(text("PRAGMA table_info(visitors)")).fetchall()
-    }
-
-    if "category_id" not in existing_visitor_columns:
+    if "category_id" not in existing_cols:
         op.add_column(
             "visitors",
             sa.Column("category_id", sa.Integer(), nullable=True),
         )
+        # Atualiza o set após adicionar
+        existing_cols = _visitor_columns(bind)
 
     # ------------------------------------------------------------------
     # 3. Busca o ID da categoria Civil
     # ------------------------------------------------------------------
-
     civil_id = bind.execute(
-        text("""
-            SELECT id
-            FROM visitor_categories
-            WHERE value = 'civil'
-            LIMIT 1
-        """)
+        text("SELECT id FROM visitor_categories WHERE value = 'civil' LIMIT 1")
     ).scalar()
 
     if not civil_id:
         raise RuntimeError("Categoria padrão 'civil' não encontrada.")
 
     # ------------------------------------------------------------------
-    # 4. Migra visitors.category string para visitors.category_id
+    # 4. Migra visitors.category → visitors.category_id
+    #    (SÓ se a coluna category ainda existir — idempotente)
     # ------------------------------------------------------------------
-    # Regra:
-    # - Compara visitors.category com visitor_categories.value
-    # - Se encontrar, usa o ID correspondente
-    # - Se não encontrar, vira Civil
+    has_category_col = "category" in existing_cols
 
-    bind.execute(
-        text("""
-            UPDATE visitors
-            SET category_id = (
-                SELECT vc.id
-                FROM visitor_categories vc
-                WHERE lower(trim(vc.value)) = lower(trim(coalesce(visitors.category, '')))
-                LIMIT 1
-            )
-        """)
-    )
+    if has_category_col:
+        bind.execute(
+            text("""
+                UPDATE visitors
+                SET category_id = (
+                    SELECT vc.id
+                    FROM visitor_categories vc
+                    WHERE lower(trim(vc.value)) = lower(trim(coalesce(visitors.category, '')))
+                    LIMIT 1
+                )
+            """)
+        )
 
+    # Preenche NULLs restantes com Civil (roda sempre, para cobrir
+    # tanto o cenário normal quanto uma execução parcial anterior)
     bind.execute(
-        text("""
-            UPDATE visitors
-            SET category_id = :civil_id
-            WHERE category_id IS NULL
-        """),
+        text("UPDATE visitors SET category_id = :civil_id WHERE category_id IS NULL"),
         {"civil_id": civil_id},
     )
 
     # ------------------------------------------------------------------
-    # 5. Remove category antiga, força category_id NOT NULL e cria FK
+    # 5. Ajusta tipos, força NOT NULL, cria FK e remove category (se existir)
     # ------------------------------------------------------------------
-    # Agora sim usamos batch_alter_table.
-    # Como a coluna antiga category será removida neste mesmo batch,
-    # o default inválido dela não entra na nova tabela temporária.
-
     with op.batch_alter_table("visitors", schema=None) as batch_op:
         batch_op.alter_column(
             "name",
@@ -190,55 +152,47 @@ def upgrade():
             type_=sa.String(length=220),
             existing_nullable=False,
         )
-
         batch_op.alter_column(
             "father_name",
             existing_type=sa.TEXT(length=220),
             type_=sa.String(length=220),
             existing_nullable=True,
         )
-
         batch_op.alter_column(
             "mom_name",
             existing_type=sa.TEXT(length=220),
             type_=sa.String(length=220),
             existing_nullable=False,
         )
-
         batch_op.alter_column(
             "cpf",
             existing_type=sa.TEXT(length=16),
             type_=sa.String(length=16),
             existing_nullable=False,
         )
-
         batch_op.alter_column(
             "phone",
             existing_type=sa.TEXT(length=20),
             type_=sa.String(length=20),
             existing_nullable=False,
         )
-
         batch_op.alter_column(
             "email",
             existing_type=sa.TEXT(length=254),
             type_=sa.String(length=254),
             existing_nullable=True,
         )
-
         batch_op.alter_column(
             "empresa",
             existing_type=sa.TEXT(length=120),
             type_=sa.String(length=120),
             existing_nullable=True,
         )
-
         batch_op.alter_column(
             "category_id",
             existing_type=sa.Integer(),
             nullable=False,
         )
-
         batch_op.create_foreign_key(
             "fk_visitors_category_id_visitor_categories",
             "visitor_categories",
@@ -246,12 +200,13 @@ def upgrade():
             ["id"],
         )
 
-        batch_op.drop_column("category")
+        # Só tenta remover se a coluna antiga ainda existir
+        if has_category_col:
+            batch_op.drop_column("category")
 
     # ------------------------------------------------------------------
-    # 6. Cria índice após a recriação da tabela
+    # 6. Cria índice (idempotente)
     # ------------------------------------------------------------------
-
     existing_indexes = {
         row[1]
         for row in bind.execute(text("PRAGMA index_list(visitors)")).fetchall()
@@ -269,35 +224,22 @@ def upgrade():
 def downgrade():
     bind = op.get_bind()
 
-    # ------------------------------------------------------------------
-    # 0. Limpeza preventiva
-    # ------------------------------------------------------------------
-
     bind.execute(text("DROP TABLE IF EXISTS _alembic_tmp_visitors"))
 
-    # ------------------------------------------------------------------
-    # 1. Recria a coluna antiga category
-    # ------------------------------------------------------------------
+    existing_cols = _visitor_columns(bind)
 
-    existing_visitor_columns = {
-        row[1]
-        for row in bind.execute(text("PRAGMA table_info(visitors)")).fetchall()
-    }
-
-    if "category" not in existing_visitor_columns:
+    # ------------------------------------------------------------------
+    # 1. Recria category se não existir
+    # ------------------------------------------------------------------
+    if "category" not in existing_cols:
         op.add_column(
             "visitors",
-            sa.Column(
-                "category",
-                sa.String(length=60),
-                nullable=True,
-            ),
+            sa.Column("category", sa.String(length=60), nullable=True),
         )
 
     # ------------------------------------------------------------------
-    # 2. Preenche category usando visitor_categories.value
+    # 2. Preenche category a partir de visitor_categories.value
     # ------------------------------------------------------------------
-
     bind.execute(
         text("""
             UPDATE visitors
@@ -309,19 +251,13 @@ def downgrade():
             )
         """)
     )
-
     bind.execute(
-        text("""
-            UPDATE visitors
-            SET category = 'civil'
-            WHERE category IS NULL OR trim(category) = ''
-        """)
+        text("UPDATE visitors SET category = 'civil' WHERE category IS NULL OR trim(category) = ''")
     )
 
     # ------------------------------------------------------------------
     # 3. Remove índice, FK e category_id
     # ------------------------------------------------------------------
-
     existing_indexes = {
         row[1]
         for row in bind.execute(text("PRAGMA index_list(visitors)")).fetchall()
@@ -335,62 +271,18 @@ def downgrade():
             "fk_visitors_category_id_visitor_categories",
             type_="foreignkey",
         )
-
-        batch_op.alter_column(
-            "empresa",
-            existing_type=sa.String(length=120),
-            type_=sa.TEXT(length=120),
-            existing_nullable=True,
-        )
-
-        batch_op.alter_column(
-            "email",
-            existing_type=sa.String(length=254),
-            type_=sa.TEXT(length=254),
-            existing_nullable=True,
-        )
-
-        batch_op.alter_column(
-            "phone",
-            existing_type=sa.String(length=20),
-            type_=sa.TEXT(length=20),
-            existing_nullable=False,
-        )
-
-        batch_op.alter_column(
-            "cpf",
-            existing_type=sa.String(length=16),
-            type_=sa.TEXT(length=16),
-            existing_nullable=False,
-        )
-
-        batch_op.alter_column(
-            "mom_name",
-            existing_type=sa.String(length=220),
-            type_=sa.TEXT(length=220),
-            existing_nullable=False,
-        )
-
-        batch_op.alter_column(
-            "father_name",
-            existing_type=sa.String(length=220),
-            type_=sa.TEXT(length=220),
-            existing_nullable=True,
-        )
-
-        batch_op.alter_column(
-            "name",
-            existing_type=sa.String(length=220),
-            type_=sa.TEXT(length=220),
-            existing_nullable=False,
-        )
-
+        batch_op.alter_column("empresa", existing_type=sa.String(120), type_=sa.TEXT(120), existing_nullable=True)
+        batch_op.alter_column("email", existing_type=sa.String(254), type_=sa.TEXT(254), existing_nullable=True)
+        batch_op.alter_column("phone", existing_type=sa.String(20), type_=sa.TEXT(20), existing_nullable=False)
+        batch_op.alter_column("cpf", existing_type=sa.String(16), type_=sa.TEXT(16), existing_nullable=False)
+        batch_op.alter_column("mom_name", existing_type=sa.String(220), type_=sa.TEXT(220), existing_nullable=False)
+        batch_op.alter_column("father_name", existing_type=sa.String(220), type_=sa.TEXT(220), existing_nullable=True)
+        batch_op.alter_column("name", existing_type=sa.String(220), type_=sa.TEXT(220), existing_nullable=False)
         batch_op.alter_column(
             "category",
-            existing_type=sa.String(length=60),
-            type_=sa.TEXT(length=30),
+            existing_type=sa.String(60),
+            type_=sa.TEXT(30),
             nullable=False,
             server_default=sa.text("'civil'"),
         )
-
         batch_op.drop_column("category_id")
