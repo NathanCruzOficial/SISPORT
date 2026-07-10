@@ -1,167 +1,133 @@
 {% extends "base.html" %}
 {% import "components/visitor_category.html" as visitor_category %}
 
+{% block toolbar_icon %}<i class="bi bi-people"></i>{% endblock %}
+{% block toolbar_title %}Visitas em Aberto{% endblock %}
+{% block toolbar_badge %}<span class="toolbar-badge ms-2">{{ visits|length }}</span>{% endblock %}
+{% block toolbar_subtitle %}<div class="toolbar-subtitle">Visitantes no aquartelamento</div>{% endblock %}
+{% block toolbar_actions %}
+<a class="btn btn-outline-secondary btn-sm" href="{{ url_for('visitor.identify') }}">
+  <i class="bi bi-arrow-left me-1"></i>Início
+</a>
+<a class="btn btn-outline-secondary btn-sm" href="{{ url_for('visitor.report_page') }}">
+  <i class="bi bi-clipboard-data me-1"></i>Relatório
+</a>
+{% endblock %}
+
 {% block content %}
-<div class="container-fluid px-3 px-md-4 py-3">
+<div class="px-3 px-md-4 pt-2">
 
-  {# ── Cabeçalho ─────────────────────────────────────────────────── #}
-  <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-3">
-    <div>
-      <h1 class="h4 mb-1">
-        <i class="bi bi-people me-1 text-success"></i>Visitas em Aberto
-        <span class="badge text-bg-success ms-2">{{ visits|length }}</span>
-      </h1>
-      <div class="text-muted small">
-        Visitantes que ainda se encontram no aquartelamento.
-      </div>
-    </div>
-    <div class="d-flex gap-2 flex-wrap">
-      <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('visitor.identify') }}">
-        <i class="bi bi-arrow-left me-1"></i>Início
-      </a>
-      <a class="btn btn-outline-primary btn-sm" href="{{ url_for('visitor.report_page') }}">
-        <i class="bi bi-clipboard-data me-1"></i>Relatório
-      </a>
-    </div>
-  </div>
-
-  {# ── Barra de busca ────────────────────────────────────────────── #}
+  {# ── Busca ──────────────────────────────────────────────────────── #}
   <div class="mb-3">
-    <div class="input-group">
+    <div class="input-group input-group-sm">
       <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
-      <input type="text"
-             id="search-visits"
-             class="form-control"
-             placeholder="Buscar por nome, CPF ou destino..."
-             autocomplete="off">
+      <input type="text" id="search-visits" class="form-control"
+             placeholder="Buscar por nome, CPF ou destino..." autocomplete="off">
     </div>
   </div>
 
-  {# ── Cards de resumo ───────────────────────────────────────────── #}
+  {# ── Status cards ───────────────────────────────────────────────── #}
   <div class="row g-2 mb-3">
     <div class="col-6 col-md-3">
-      <div class="card border-0 shadow-sm text-center py-2">
-        <div class="text-success fw-bold fs-4"><i class="bi bi-people-fill text-success fs-4"></i> {{ visits|length }}</div>
-        <div class="text-muted small">No aquartelamento</div>
+      <div class="status-card">
+        <div class="status-icon" style="color:var(--olive-700);"><i class="bi bi-people-fill"></i></div>
+        <div class="status-value" style="color:var(--olive-700);">{{ visits|length }}</div>
+        <div class="status-label">No aquartelamento</div>
       </div>
     </div>
     <div class="col-6 col-md-3">
-      <div class="card border-0 shadow-sm text-center py-2">
-        <div class="text-primary fw-bold fs-4"><i class="bi bi-calendar-check text-primary fs-4"></i> {{ today_count }}</div>
-        <div class="text-muted small">Entradas hoje</div>
+      <div class="status-card">
+        <div class="status-icon" style="color:var(--olive-700);"><i class="bi bi-calendar-check"></i></div>
+        <div class="status-value">{{ today_count }}</div>
+        <div class="status-label">Entradas hoje</div>
       </div>
     </div>
     <div class="col-6 col-md-3">
-      <div class="card border-0 shadow-sm text-center py-2">
-        <div class="text-secondary fw-bold fs-4"><i class="bi bi-person-check text-info fs-4"></i> {{ checked_out_today }}</div>
-        <div class="text-muted small">Saídas hoje</div>
+      <div class="status-card">
+        <div class="status-icon" style="color:var(--terra-500);"><i class="bi bi-person-check"></i></div>
+        <div class="status-value">{{ checked_out_today }}</div>
+        <div class="status-label">Saídas hoje</div>
       </div>
     </div>
     <div class="col-6 col-md-3">
-        <div class="card border-0 shadow-sm text-center py-2">
-            {% set oldest = visits[0].check_in if visits else None %}
-            <div class="d-flex align-items-center justify-content-center gap-2">
-            <i class="bi bi-hourglass-split text-warning fs-4"></i>
-            <div class="fw-bold fs-4 text-warning"
-                {% if oldest %}
-                data-timer="1"
-                data-checkin="{{ oldest.isoformat() }}"
-                {% endif %}>
-                {% if oldest %}--{% else %}00:00:00{% endif %}
-            </div>
-            </div>
-            <div class="text-muted small">Mais longa</div>
+      <div class="status-card">
+        {% set oldest = visits[0].check_in if visits else None %}
+        <div class="status-icon" style="color:var(--gold);"><i class="bi bi-hourglass-split"></i></div>
+        <div class="status-value" style="color:var(--gold);"
+             {% if oldest %}data-timer="1" data-checkin="{{ oldest.isoformat() }}"{% endif %}>
+          {% if oldest %}--{% else %}00:00:00{% endif %}
         </div>
+        <div class="status-label">Mais longa</div>
+      </div>
     </div>
   </div>
 
-  {# ── Tabela de visitas em aberto ────────────────────────────────── #}
+  {# ── Tabela ─────────────────────────────────────────────────────── #}
   {% if visits|length > 0 %}
-  <div class="card shadow-sm border-0">
-    <div class="table-responsive" style="max-height: calc(100vh - 400px); overflow-y: auto;">
-      <table class="table table-hover align-middle mb-0" id="visits-table">
+  <div class="sheet">
+    <div class="table-responsive" style="max-height: calc(100vh - 370px); overflow-y: auto;">
+      <table class="table table-hover align-middle mb-0" id="visits-table" style="font-size:.75rem;">
         <thead class="table-light" style="position: sticky; top: 0; z-index: 1;">
           <tr>
-            <th style="width:36px;"></th>
-            <th style="width:64px;">Foto</th>
+            <th style="width:32px;"></th>
+            <th style="width:56px;">Foto</th>
             <th>Visitante</th>
             <th>Destino</th>
             <th>Entrada</th>
-            <th style="width:120px;">Tempo</th>
-            <th class="text-end" style="width:200px;">Ações</th>
+            <th style="width:85px;">Tempo</th>
+            <th class="text-end" style="width:165px;">Ações</th>
           </tr>
         </thead>
         <tbody>
           {% for v in visits %}
-          <tr data-searchable="{{ v.visitor.name|lower }} {{ v.visitor.cpf }} {{ v.destination|lower }} {{ v.visitor.category.label|lower if v.visitor.category else 'civil' }}">
-            {# Status — sempre verde (aberto) #}
+          <tr data-searchable="{{ v.visitor.name|lower }} {{ v.visitor.cpf }} {{ v.destination|lower }}">
             <td>
-              <span class="badge text-bg-success" title="Dentro da instalação">●</span>
+              <span class="badge rounded-pill" style="background:var(--olive-700);width:8px;height:8px;padding:0;display:inline-block;" title="Dentro da instalação"></span>
             </td>
-
-            {# Foto #}
             <td>
-              <div class="photo-box" style="width:100px;height:100px;border-radius:12px;">
+              <div class="photo-box" style="width:46px;height:46px;border-radius:6px;">
                 {% if v.visitor.photo_data %}
-                  <img src="{{ photo_url('visitor', v.visitor.id) }}"
-                      alt="Foto"
-                      class="rounded-3"
-                      style="width:100px; height:100px; object-fit:cover;">
+                  <img src="{{ photo_url('visitor', v.visitor.id) }}" alt="Foto"
+                       style="width:46px;height:46px;object-fit:cover;">
                 {% else %}
                   <img src="{{ url_for('static', filename='img/avatar-placeholder.jpg') }}"
-                      alt="Sem foto"
-                      class="rounded-3 opacity-50"
-                      style="width:100px; height:100px; object-fit:cover;">
+                       alt="Sem foto" class="opacity-50"
+                       style="width:46px;height:46px;object-fit:cover;">
                 {% endif %}
               </div>
             </td>
-
-            {# Dados do visitante #}
             <td>
-              <div class="fw-semibold">{{ v.visitor.name }}</div>
-              <div class="text-muted small">
+              <div class="fw-semibold small">{{ v.visitor.name }}</div>
+              <div class="muted" style="font-size:.63rem;">
                 <i class="bi bi-person-vcard"></i> {{ v.visitor.cpf }}
               </div>
-              <div class="text-muted small">
+              <div class="muted" style="font-size:.63rem;">
                 <i class="bi bi-telephone"></i> {{ v.visitor.phone }}
               </div>
-              <div class="small mt-1">
+              <div class="mt-1">
                 {{ visitor_category.badge(v.visitor.category) }}
               </div>
-
             </td>
-
-            {# Destino #}
-            <td>{{ v.destination }}</td>
-
-            {# Entrada #}
-            <td class="small">{{ v.check_in.strftime("%d/%m/%Y %H:%M:%S") }}</td>
-
-            {# Timer (contando ao vivo) #}
+            <td class="small">{{ v.destination }}</td>
+            <td class="small">{{ v.check_in.strftime("%d/%m/%Y %H:%M") }}</td>
             <td>
-              <span class="font-monospace text-success fw-semibold"
+              <span class="font-monospace fw-semibold"
+                    style="font-size:.68rem;color:var(--olive-700);"
                     data-timer="1"
-                    data-checkin="{{ v.check_in.isoformat() }}">
-                --
-              </span>
+                    data-checkin="{{ v.check_in.isoformat() }}">--</span>
             </td>
-
-            {# Ações #}
             <td class="text-end">
               <div class="d-flex gap-1 justify-content-end">
-                {# Editar #}
                 <a href="{{ url_for('visitor.visitor_edit', visitor_id=v.visitor.id) }}"
-                   class="btn btn-outline-primary btn-sm"
-                   title="Editar cadastro">
+                   class="btn btn-outline-secondary btn-sm" title="Editar" style="font-size:.68rem;">
                   <i class="bi bi-pencil-square"></i>
                 </a>
-
-                {# Dar saída #}
                 <form method="post"
                       action="{{ url_for('visitor.checkout', visit_id=v.id) }}"
                       onsubmit="return confirmAction(event, 'Confirma a saída de {{ v.visitor.name }}?')">
-                  <button type="submit" class="btn btn-warning btn-sm">
-                    <i class="bi bi-box-arrow-right me-1"></i>Dar saída
+                  <button type="submit" class="btn btn-sm"
+                          style="background:var(--gold);color:#fff;border-color:var(--gold);font-size:.68rem;">
+                    <i class="bi bi-box-arrow-right me-1"></i>Saída
                   </button>
                 </form>
               </div>
@@ -172,13 +138,12 @@
       </table>
     </div>
   </div>
-
   {% else %}
-  <div class="card shadow-sm border-0">
+  <div class="sheet">
     <div class="text-center text-muted py-5">
-      <i class="bi bi-shield-check d-block mb-2 text-success opacity-50" style="font-size:3rem;"></i>
-      <div class="fw-semibold">Nenhum visitante no interior do aquartelamento</div>
-      <div class="small">Todas as visitas foram finalizadas.</div>
+      <i class="bi bi-shield-check d-block mb-2 opacity-50" style="font-size:2rem;color:var(--olive-700);"></i>
+      <div class="fw-semibold" style="font-size:.8rem;">Nenhum visitante no interior</div>
+      <div class="muted">Todas as visitas foram finalizadas.</div>
     </div>
   </div>
   {% endif %}
@@ -188,43 +153,31 @@
 
 {% block scripts %}
 <script>
-  // ── Timer ao vivo ──────────────────────────────────────────────────
   function pad2(n){ return String(n).padStart(2,"0"); }
   function fmtDuration(ms){
-    ms = Math.max(0, ms);
-    const t = Math.floor(ms/1000),
-          h = Math.floor(t/3600),
-          m = Math.floor((t%3600)/60),
-          s = t%60;
+    ms=Math.max(0,ms);
+    const t=Math.floor(ms/1000), h=Math.floor(t/3600),
+          m=Math.floor((t%3600)/60), s=t%60;
     return `${pad2(h)}:${pad2(m)}:${pad2(s)}`;
   }
   function tickTimers(){
-    const now = Date.now();
-    document.querySelectorAll('[data-timer="1"]').forEach(el => {
-      const cin  = new Date(el.dataset.checkin).getTime();
-      const cout = el.dataset.checkout ? new Date(el.dataset.checkout).getTime() : null;
-      el.textContent = fmtDuration((cout ?? now) - cin);
+    const now=Date.now();
+    document.querySelectorAll('[data-timer="1"]').forEach(el=>{
+      const cin=new Date(el.dataset.checkin).getTime();
+      const cout=el.dataset.checkout?new Date(el.dataset.checkout).getTime():null;
+      el.textContent=fmtDuration((cout??now)-cin);
     });
   }
-  tickTimers();
-  setInterval(tickTimers, 1000);
+  tickTimers(); setInterval(tickTimers,1000);
 
-  // ── Busca/filtro em tempo real ─────────────────────────────────────
-  const searchInput = document.getElementById('search-visits');
-  if (searchInput) {
-    searchInput.addEventListener('input', function() {
-      const query = this.value.toLowerCase().trim();
-      let visible = 0;
-      document.querySelectorAll('#visits-table tbody tr').forEach(row => {
-        const text = row.getAttribute('data-searchable') || '';
-        const show = text.includes(query);
-        row.style.display = show ? '' : 'none';
-        if (show) visible++;
+  const searchInput=document.getElementById('search-visits');
+  if(searchInput){
+    searchInput.addEventListener('input',function(){
+      const query=this.value.toLowerCase().trim();
+      document.querySelectorAll('#visits-table tbody tr').forEach(row=>{
+        const text=row.getAttribute('data-searchable')||'';
+        row.style.display=text.includes(query)?'':'none';
       });
-
-      // Atualiza o badge do cabeçalho em tempo real
-      const badge = document.getElementById('open-count-badge');
-      if (badge) badge.textContent = query ? visible : {{ visits|length }};
     });
   }
 </script>

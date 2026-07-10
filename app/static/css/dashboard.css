@@ -1,10 +1,10 @@
 /* ───────────────────────────────────────────────────────────────
-   Dashboard - Estilos
+   Dashboard - Estilos Harmonizados
    ─────────────────────────────────────────────────────────────── */
 
 .dashboard-header {
-  margin-top: 18px;
-  margin-bottom: 16px;
+  margin-top: 14px;
+  margin-bottom: 12px;
 }
 
 /* ── Iframe oculto para impressão ─────────────────────────────── */
@@ -21,74 +21,88 @@
 
 /* ── Cards de indicadores ─────────────────────────────────────── */
 .metric-card {
-  background: #fff;
-  border-radius: 18px;
-  border: 1px solid rgba(0, 0, 0, .08);
-  box-shadow: 0 10px 26px rgba(46, 47, 50, .08);
-  padding: 18px;
+  background: var(--bg-card);
+  border-radius: 10px;
+  border: 1px solid rgba(0, 0, 0, .06);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .04);
+  padding: 14px 16px;
   height: 100%;
   transition: transform .15s ease, box-shadow .15s ease;
 }
 
 .metric-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 14px 30px rgba(46, 47, 50, .12);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, .08);
 }
 
 .metric-icon {
-  width: 44px;
-  height: 44px;
-  border-radius: 14px;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.35rem;
-  color: #fff;
-  background: linear-gradient(135deg, var(--olive), var(--olive-dark));
+  font-size: 1.1rem;
+  background: var(--olive-100);
+  color: var(--olive-700);
 }
 
 .metric-label {
-  color: #6c757d;
-  font-size: .82rem;
+  font-size: .6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--terra-700);
   margin-bottom: 2px;
 }
 
 .metric-value {
-  font-size: 1.45rem;
-  font-weight: 900;
+  font-size: 1.35rem;
+  font-weight: 800;
   line-height: 1.1;
+  color: var(--text-main);
 }
 
 /* ── Cards de gráficos ────────────────────────────────────────── */
 .chart-card {
-  background: #fff;
-  border-radius: 18px;
-  border: 1px solid rgba(0, 0, 0, .08);
-  box-shadow: 0 10px 26px rgba(16, 24, 40, .08);
-  padding: 18px;
+  background: var(--bg-card);
+  border-radius: 10px;
+  border: 1px solid rgba(0, 0, 0, .06);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .04);
+  padding: 14px 16px;
   height: 100%;
 }
 
 .chart-title {
-  font-weight: 900;
-  font-size: 1rem;
-  margin-bottom: 12px;
+  font-weight: 700;
+  font-size: .85rem;
+  margin-bottom: 10px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  color: var(--text-main);
+}
+
+.chart-title i {
+  color: var(--olive-700);
+  font-size: .9rem;
 }
 
 .chart-box {
   position: relative;
-  height: 280px;
+  height: 260px;
 }
 
 .chart-box-lg {
   position: relative;
-  height: 340px;
+  height: 300px;
 }
 
-/* ── Indica que o gráfico é clicável ──────────────────────────── */
+.chart-box.chart-box-presence {
+  height: 280px;
+}
+
+/* ── Canvas clicável ──────────────────────────────────────────── */
 .chart-box canvas,
 .chart-box-lg canvas {
   cursor: pointer;
@@ -96,17 +110,27 @@
 
 /* ── Card de filtro ativo ─────────────────────────────────────── */
 .active-filter-card {
-  background: #fff;
-  border-radius: 18px;
-  border: 1px solid rgba(0, 0, 0, .08);
-  box-shadow: 0 10px 26px rgba(16, 24, 40, .08);
-  padding: 14px 16px;
+  background: var(--bg-card);
+  border-radius: 10px;
+  border: 1px solid rgba(0, 0, 0, .06);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .04);
+  padding: 10px 14px;
+  font-size: .82rem;
 }
 
 /* ── Tabela de destinos ───────────────────────────────────────── */
+.destination-table {
+  font-size: .78rem;
+}
+
 .destination-table td,
 .destination-table th {
   vertical-align: middle;
+}
+
+/* ── Modal de detalhes ────────────────────────────────────────── */
+#dashboardDetailModalContext:empty {
+  display: none;
 }
 
 /* ── Impressão ────────────────────────────────────────────────── */
@@ -115,23 +139,3 @@
     display: none !important;
   }
 }
-/* ── Estilos para impressão de anexo (modal) ──────────────────── */
-.dashboard-detail-print {
-  position: fixed;
-  left: -10000px;
-  top: 0;
-  width: 1123px;
-  height: 794px;
-  border: 0;
-  opacity: 0;
-  pointer-events: none;
-}
-
-/* Pequeno ajuste no header do modal */
-#dashboardDetailModalContext:empty {
-  display: none;
-}
-.chart-box.chart-box-presence {
-  height: 320px;
-}
-

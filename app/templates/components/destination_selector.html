@@ -1,104 +1,148 @@
 {# =====================================================================
   components/destination_selector.html
-  Seletor rápido e moderno de destino/local para check-in.
+  Seletor rápido de destino/local para check-in.
+  Harmonizado com paleta SISPORT (olive-700).
+  Comportamento: acordeão — apenas um grupo aberto por vez.
 ===================================================================== #}
 
 <style>
   .destination-selector {
     display: grid;
-    gap: 1rem;
+    gap: .6rem;
   }
 
   .destination-group {
-    border: 1px solid rgba(0, 0, 0, .08);
-    border-radius: 1rem;
-    background: #fff;
+    border: 1px solid rgba(0, 0, 0, .06);
+    border-radius: 8px;
+    background: var(--bg-card, #fff);
     overflow: hidden;
   }
 
   .destination-group-header {
     display: flex;
     align-items: center;
-    gap: .75rem;
-    padding: .85rem 1rem;
-    background: #f8f9fa;
-    border-bottom: 1px solid rgba(0, 0, 0, .06);
+    gap: .5rem;
+    padding: .5rem .75rem;
+    background: var(--bg-footer, #FAFAF7);
+    border-bottom: 1px solid transparent;
+    cursor: pointer;
+    user-select: none;
+    transition: background .15s;
+  }
+
+  .destination-group-header:hover {
+    background: rgba(74, 93, 35, .06);
+  }
+
+  /* Quando aberto, a borda inferior aparece */
+  .destination-group.is-open > .destination-group-header {
+    border-bottom-color: rgba(0, 0, 0, .05);
   }
 
   .destination-group-dot {
-    width: 14px;
-    height: 14px;
+    width: 10px;
+    height: 10px;
     border-radius: 999px;
     flex-shrink: 0;
   }
 
   .destination-group-title {
     font-weight: 700;
+    font-size: .72rem;
     line-height: 1.2;
+    color: var(--text-main, #2C2416);
+    flex: 1;
+  }
+
+  /* Ícone de seta (chevron) */
+  .destination-group-chevron {
+    font-size: .7rem;
+    color: var(--text-muted, #9CA3AF);
+    transition: transform .2s ease;
+    flex-shrink: 0;
+  }
+
+  .destination-group.is-open > .destination-group-header .destination-group-chevron {
+    transform: rotate(180deg);
+  }
+
+  /* Corpo colapsável — escondido por padrão */
+  .destination-group-body {
+    display: none;
+  }
+
+  .destination-group.is-open > .destination-group-body {
+    display: block;
   }
 
   .destination-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
-    gap: .75rem;
-    padding: 1rem;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: .5rem;
+    padding: .6rem .75rem;
   }
 
   .destination-card {
-    border: 2px solid rgba(0, 0, 0, .08);
-    border-radius: 1rem;
-    padding: 1rem;
-    background: #fff;
+    border: 1.5px solid rgba(0, 0, 0, .08);
+    border-radius: 8px;
+    padding: .6rem .7rem;
+    background: var(--bg-card, #fff);
     cursor: pointer;
-    min-height: 88px;
+    min-height: 64px;
     transition: .15s ease-in-out;
     text-align: left;
     width: 100%;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
   }
 
   .destination-card:hover {
-    transform: translateY(-2px);
-    border-color: rgba(25, 135, 84, .45);
-    box-shadow: 0 .5rem 1.25rem rgba(0, 0, 0, .08);
+    border-color: var(--olive-700, #4A5D23);
+    background: rgba(74, 93, 35, .03);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, .06);
   }
 
   .destination-card.is-selected {
-    border-color: #198754;
-    background: rgba(25, 135, 84, .08);
-    box-shadow: 0 0 0 .25rem rgba(25, 135, 84, .15);
+    border-color: var(--olive-700, #4A5D23);
+    background: var(--olive-100, rgba(74,93,35,0.10));
+    box-shadow: 0 0 0 2px rgba(74, 93, 35, .12);
   }
 
   .destination-card-icon {
-    width: 38px;
-    height: 38px;
-    border-radius: .8rem;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    margin-bottom: .5rem;
-    background: rgba(25, 135, 84, .1);
-    color: #198754;
+    flex-shrink: 0;
+    background: var(--olive-100, rgba(74,93,35,0.10));
+    color: var(--olive-700, #4A5D23);
+    font-size: .75rem;
   }
 
   .destination-card-name {
-    font-weight: 700;
-    font-size: .95rem;
-    line-height: 1.15;
+    font-weight: 600;
+    font-size: .75rem;
+    line-height: 1.2;
+    color: var(--text-main, #2C2416);
   }
 
   .destination-search {
     position: sticky;
-    top: .5rem;
+    top: .25rem;
     z-index: 5;
-    background: #fff;
-    border-radius: 1rem;
+    background: var(--bg-card, #fff);
+    border-radius: 8px;
   }
 
   .destination-empty {
     display: none;
-    padding: 1rem;
-    color: #6c757d;
-    font-size: .9rem;
+    padding: .75rem;
+    color: var(--text-muted, #9CA3AF);
+    font-size: .75rem;
+    text-align: center;
   }
 
   .destination-card.is-hidden,
@@ -111,62 +155,62 @@
 
 <div class="destination-selector">
 
-  <div class="destination-search shadow-sm border p-2">
-    <div class="input-group input-group-lg">
-      <span class="input-group-text bg-white">
-        <i class="bi bi-search"></i>
+  <div class="destination-search border p-2" style="border-color:var(--border,#d4d0c8)!important;">
+    <div class="input-group input-group-sm">
+      <span class="input-group-text bg-white" style="border-color:var(--border,#d4d0c8);">
+        <i class="bi bi-search" style="font-size:.75rem;"></i>
       </span>
       <input type="search"
              id="destinationSearch"
              class="form-control"
-             placeholder="Buscar local rapidamente...">
+             placeholder="Buscar local..."
+             style="font-size:.78rem;">
     </div>
-    <div class="small text-muted px-2 pt-2">
-      Clique diretamente no local de destino.
+    <div class="muted px-2 pt-1" style="font-size:.62rem;">
+      Clique no local de destino.
     </div>
   </div>
 
   <div id="destinationEmpty" class="destination-empty">
-    Nenhum local encontrado para a busca.
+    Nenhum local encontrado.
   </div>
 
   {% macro render_group(group) %}
-    <div class="destination-group" data-destination-group>
+    <div class="destination-group{% if group.is_root %} is-open{% endif %}" data-destination-group>
       {% if not group.is_root %}
-      <div class="destination-group-header">
-        <span class="destination-group-dot"
-              style="background: {{ group.color }};"></span>
-        <div>
-          <div class="destination-group-title">{{ group.name }}</div>
-          <div class="small text-muted">Selecione um local abaixo</div>
-        </div>
+      <div class="destination-group-header" data-destination-group-toggle>
+        <span class="destination-group-dot" style="background: {{ group.color }};"></span>
+        <div class="destination-group-title">{{ group.name }}</div>
+        <i class="bi bi-chevron-down destination-group-chevron"></i>
       </div>
       {% endif %}
 
-      {% if group.places %}
-      <div class="destination-grid">
-        {% for place in group.places %}
-          <button type="button"
-                  class="destination-card"
-                  data-destination-card
-                  data-place-id="{{ place.id }}"
-                  data-place-name="{{ place.name|lower }}">
-            <span class="destination-card-icon">
-              <i class="bi bi-geo-alt-fill"></i>
-            </span>
-            <div class="destination-card-name">{{ place.name }}</div>
-          </button>
-        {% endfor %}
-      </div>
-      {% endif %}
-
-      {% if group.children %}
-        <div class="px-3 pb-3 d-grid gap-3">
-          {% for child in group.children %}
-            {{ render_group(child) }}
+      <div class="destination-group-body">
+        {% if group.places %}
+        <div class="destination-grid">
+          {% for place in group.places %}
+            <button type="button"
+                    class="destination-card"
+                    data-destination-card
+                    data-place-id="{{ place.id }}"
+                    data-place-name="{{ place.name|lower }}">
+              <span class="destination-card-icon">
+                <i class="bi bi-geo-alt-fill"></i>
+              </span>
+              <div class="destination-card-name">{{ place.name }}</div>
+            </button>
           {% endfor %}
         </div>
-      {% endif %}
+        {% endif %}
+
+        {% if group.children %}
+          <div class="px-2 pb-2 d-grid gap-2">
+            {% for child in group.children %}
+              {{ render_group(child) }}
+            {% endfor %}
+          </div>
+        {% endif %}
+      </div>
     </div>
   {% endmacro %}
 
@@ -180,41 +224,88 @@
   document.addEventListener("DOMContentLoaded", function () {
     const hiddenInput = document.getElementById("destination_place_id");
     const searchInput = document.getElementById("destinationSearch");
-    const emptyBox = document.getElementById("destinationEmpty");
+    const emptyBox    = document.getElementById("destinationEmpty");
 
-    const cards = Array.from(document.querySelectorAll("[data-destination-card]"));
+    const cards  = Array.from(document.querySelectorAll("[data-destination-card]"));
     const groups = Array.from(document.querySelectorAll("[data-destination-group]"));
 
+/* ================================================================
+   Acordeão: apenas um grupo aberto por vez NO MESMO NÍVEL
+   Grupo raiz NUNCA é fechado
+   ================================================================ */
+const toggles = Array.from(document.querySelectorAll("[data-destination-group-toggle]"));
+
+toggles.forEach(function (toggle) {
+  toggle.addEventListener("click", function (e) {
+    e.stopPropagation();
+
+    const group = toggle.closest("[data-destination-group]");
+    if (!group) return;
+
+    const isOpen = group.classList.contains("is-open");
+
+    // Encontra o container pai (o .destination-group-body que contém este grupo)
+    const parentBody = group.parentElement.closest(".destination-group-body");
+
+    if (parentBody) {
+      // Fecha apenas os grupos IRMÃOS diretos (mesmo nível)
+      const siblingGroups = parentBody.querySelectorAll(":scope > .destination-group, :scope > .px-2 > .destination-group");
+      siblingGroups.forEach(function (sibling) {
+        if (sibling !== group) {
+          sibling.classList.remove("is-open");
+        }
+      });
+    }
+
+    // Toggle: abre se estava fechado, fecha se estava aberto
+    if (isOpen) {
+      group.classList.remove("is-open");
+    } else {
+      group.classList.add("is-open");
+    }
+  });
+});
+
+
+    /* ================================================================
+       Seleção de card
+       ================================================================ */
     cards.forEach(function (card) {
       card.addEventListener("click", function () {
-        cards.forEach(function (item) {
-          item.classList.remove("is-selected");
-        });
-
+        cards.forEach(function (item) { item.classList.remove("is-selected"); });
         card.classList.add("is-selected");
         hiddenInput.value = card.dataset.placeId || "";
       });
     });
 
+    /* ================================================================
+       Busca / filtro — expande grupos com resultados visíveis
+       ================================================================ */
     if (searchInput) {
       searchInput.addEventListener("input", function () {
         const term = searchInput.value.trim().toLowerCase();
         let visibleCards = 0;
 
+        // Primeiro fecha todos os grupos
+        groups.forEach(function (g) {
+          g.classList.remove("is-open");
+        });
+
         cards.forEach(function (card) {
-          const name = card.dataset.placeName || "";
+          const name    = card.dataset.placeName || "";
           const visible = !term || name.includes(term);
-
           card.classList.toggle("is-hidden", !visible);
-
-          if (visible) {
-            visibleCards += 1;
-          }
+          if (visible) visibleCards += 1;
         });
 
         groups.forEach(function (group) {
           const visibleInside = group.querySelectorAll("[data-destination-card]:not(.is-hidden)").length > 0;
           group.classList.toggle("is-hidden", !visibleInside);
+
+          // Se tem termo de busca e o grupo tem cards visíveis, expande-o
+          if (term && visibleInside) {
+            group.classList.add("is-open");
+          }
         });
 
         if (emptyBox) {
@@ -223,18 +314,16 @@
       });
     }
 
+    /* ================================================================
+       Validação no submit
+       ================================================================ */
     const forms = document.querySelectorAll("form[data-requires-destination='1']");
-
     forms.forEach(function (form) {
       form.addEventListener("submit", function (event) {
         if (!hiddenInput.value) {
           event.preventDefault();
-
           alert("Selecione o local/destino da visita.");
-
-          if (searchInput) {
-            searchInput.focus();
-          }
+          if (searchInput) searchInput.focus();
         }
       });
     });

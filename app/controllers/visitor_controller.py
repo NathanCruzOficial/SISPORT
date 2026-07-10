@@ -212,6 +212,16 @@ def _check_duplicate_fields(name: str, father_name: str, mom_name: str,
         f"Utilize a busca por CPF para localizar o registro existente."
     )
 
+def wizard_create_visitor_and_finish() -> Visitor:
+    """
+    Cria o visitante definitivo a partir dos dados do wizard,
+    limpa a foto temporária e encerra a sessão do wizard.
+    """
+    visitor = create_visitor_if_not_exists_from_wizard()
+    session.pop("wizard", None)
+    return visitor
+
+
 
 def wizard_step1_submit(name: str, father_name: str, mom_name: str,
                         cpf: str, phone: str, email: str, empresa: str,
@@ -285,7 +295,7 @@ def wizard_step1_submit(name: str, father_name: str, mom_name: str,
 def wizard_step2_submit(photo_data_url: str | None):
     """
     Processa a Etapa 2 do wizard: recebe a foto (data URL), decodifica
-    e salva na tabela temporária. Se pulou, limpa referência anterior.
+    e salva na tabela temporária.
     """
     w = session.get("wizard") or {}
     cpf = (w.get("cpf") or "").strip()
@@ -326,8 +336,10 @@ def wizard_step2_submit(photo_data_url: str | None):
         w["temp_photo_id"]  = None
         w["photo_captured"] = False
 
-    w["step"] = 3
+    # ── O wizard agora tem apenas 2 etapas ─────────────────────
+    w["step"] = 2
     session["wizard"] = w
+
 
 
 

@@ -1,339 +1,227 @@
-{# ═══════════════════════════════════════════════════════════════════
-   visitor_edit.html — Edição de Visitante — SISPORT V1.1
-   Layout simplificado: foto à esquerda com câmera embutida,
-   campos editáveis à direita, ações no rodapé.
-   Regras de categoria:
-   - Não há categorias estáticas.
-   - Se não houver categorias no sistema, usar "civil" como padrão (hidden input).
-   - Quando existir qualquer categoria no BD, ela aparece automaticamente em todos os lugares.
-   ═══════════════════════════════════════════════════════════════════ #}
-
 {% extends "base.html" %}
 {% import "components/visitor_category.html" as visitor_category %}
 
+{% block toolbar_icon %}<i class="bi bi-person-badge"></i>{% endblock %}
+{% block toolbar_title %}Editar Visitante{% endblock %}
+{% block toolbar_subtitle %}<div class="toolbar-subtitle">{{ visitor.name }}</div>{% endblock %}
+{% block toolbar_actions %}
+<a class="btn btn-outline-secondary btn-sm"
+   href="{{ url_for('visitor.checkin_form', visitor_id=visitor.id) }}">
+  <i class="bi bi-arrow-left me-1"></i>Voltar
+</a>
+{% endblock %}
 
 {% block content %}
-<div class="center-card">
-  <div class="card-body">
+<div class="d-flex justify-content-center px-3 px-md-4 pt-2 pb-4">
 
-    {# ── Cabeçalho ──────────────────────────────────────────────── #}
-    <div class="id-card-header rounded-top-4">
-      <div class="d-flex align-items-center gap-3">
-        <i class="bi bi-person-badge-fill fs-3 opacity-100"></i>
+  <div class="sheet mx-auto" style="max-width:900px; width:100%;">
+    <div class="id-card-header" style="border-radius:8px 8px 0 0;">
+      <div class="d-flex align-items-center gap-2">
+        <i class="bi bi-person-badge-fill fs-5"></i>
         <div>
           <h2 class="id-card-title mb-0">Ficha de Visitante</h2>
           <div class="small opacity-75">Edição de dados e foto</div>
         </div>
       </div>
-      <a class="btn btn-outline-light"
-         href="{{ url_for('visitor.checkin_form', visitor_id=visitor.id) }}">
-        <i class="bi bi-arrow-left me-1"></i>Voltar
-      </a>
+      {{ visitor_category.badge(visitor.category, 'fs-6') }}
     </div>
 
-    <div class="row g-4">
+    <div class="row g-0">
+      <!-- Coluna da foto -->
+      <div class="col-12 col-lg-4" style="background:var(--bg-footer);">
+        <div class="p-3 text-center">
 
-      {# ══════════════════════════════════════════════════════════════
-         Coluna Esquerda — Foto + Câmera + Badge
-         ══════════════════════════════════════════════════════════════ #}
-      <div class="col-12 col-lg-4">
-        <div class="sheet p-3 text-center">
-
-          {# ── Foto atual (esconde quando câmera abre) ───────────── #}
           <div id="current-photo-wrapper">
-            <div class="photo-box mb-3 mx-auto" style="width:200px;height:200px;">
+            <div class="photo-box mb-3 mx-auto" style="width:150px;height:150px;">
               {% if visitor.photo_data %}
-                <img src="{{ photo_url('visitor', visitor.id) }}"
-                     alt="Foto do visitante"
-                     class="w-100 h-100"
-                     style="object-fit: cover;">
+                <img src="{{ photo_url('visitor', visitor.id) }}" alt="Foto"
+                     style="width:150px;height:150px;object-fit:cover;">
               {% else %}
                 <img src="{{ url_for('static', filename='img/avatar-placeholder.jpg') }}"
-                     alt="Sem foto"
-                     class="w-100 h-100 opacity-50"
-                     style="object-fit: cover;">
+                     alt="Sem foto" class="opacity-50"
+                     style="width:150px;height:150px;object-fit:cover;">
               {% endif %}
             </div>
-
-            <button type="button" id="btn-open-camera" class="btn btn-outline-success w-100">
+            <button type="button" id="btn-open-camera" class="btn btn-outline-secondary btn-sm w-100">
               <i class="bi bi-camera me-1"></i>Trocar foto
             </button>
           </div>
 
-          {# ── Câmera (hidden por padrão) ────────────────────────── #}
-          <div id="camera-wrapper" style="display: none;" data-camera="1">
+          <div id="camera-wrapper" style="display:none;" data-camera="1">
             <form method="post"
                   action="{{ url_for('visitor.visitor_update_photo', visitor_id=visitor.id) }}"
                   id="photo-form">
-
               <input type="hidden" name="photo_data_url" id="photo_data_url">
-
               <div id="camera-container"
-                   class="position-relative rounded-3 overflow-hidden bg-dark mx-auto border border-2 border-secondary mb-3"
-                   style="width: 220px; aspect-ratio: 1;">
-
-                <video id="cam-video" playsinline muted
-                       class="w-100 h-100" style="object-fit: cover; display: block;"></video>
-
+                   class="position-relative rounded-3 overflow-hidden bg-dark mx-auto border border-2 border-secondary mb-2"
+                   style="width:180px;aspect-ratio:1;">
+                <video id="cam-video" playsinline muted class="w-100 h-100"
+                       style="object-fit:cover;display:block;"></video>
                 <canvas id="cam-canvas"
                         class="w-100 h-100 position-absolute top-0 start-0"
-                        style="object-fit: cover; display: none;"></canvas>
-
+                        style="object-fit:cover;display:none;"></canvas>
                 <div id="cam-loading"
                      class="position-absolute top-0 start-0 w-100 h-100 d-flex flex-column align-items-center justify-content-center text-white"
-                     style="display: none;">
+                     style="display:none;">
                   <div class="spinner-border spinner-border-sm text-light mb-2" role="status"></div>
                   <span class="small">Abrindo...</span>
                 </div>
-
                 <div id="cam-error"
                      class="position-absolute top-0 start-0 w-100 h-100 d-flex flex-column align-items-center justify-content-center text-white"
-                     style="display: none !important;">
+                     style="display:none!important;">
                   <i class="bi bi-camera-video-off fs-3 mb-1 text-danger"></i>
                   <span class="small">Câmera indisponível</span>
                 </div>
               </div>
-
-              <button type="button" id="btn-capture"
-                      class="btn btn-success w-100 mb-2" disabled>
+              <button type="button" id="btn-capture" class="btn btn-olive btn-sm w-100 mb-2" disabled>
                 <i class="bi bi-camera-fill me-1"></i>Capturar
               </button>
-
-              <button type="button" id="btn-retake"
-                      class="btn btn-outline-secondary w-100 mb-2" style="display: none;">
+              <button type="button" id="btn-retake" class="btn btn-outline-secondary btn-sm w-100 mb-2" style="display:none;">
                 <i class="bi bi-arrow-clockwise me-1"></i>Tirar outra
               </button>
-
-              <div id="btn-save-photo-wrapper" style="display: none;">
-                <button type="submit" class="btn btn-success w-100 mb-2">
+              <div id="btn-save-photo-wrapper" style="display:none;">
+                <button type="submit" class="btn btn-olive btn-sm w-100 mb-2">
                   <i class="bi bi-check-lg me-1"></i>Salvar foto
                 </button>
               </div>
-
-              <button type="button" id="btn-cancel-camera"
-                      class="btn btn-outline-secondary btn-sm w-100">
-                Cancelar
-              </button>
+              <button type="button" id="btn-cancel-camera" class="btn btn-outline-secondary btn-sm w-100">Cancelar</button>
             </form>
           </div>
+        </div>
+      </div>
 
-          {# ── Categoria badge dinâmico ───────── #}
-          <div class="mt-3">
-            {{ visitor_category.badge(visitor.category, 'fs-6') }}
-          </div>
-
-
-        </div>{# /sheet #}
-      </div>{# /col-lg-4 #}
-
-      {# ══════════════════════════════════════════════════════════════
-         Coluna Direita — Formulário de dados
-         ══════════════════════════════════════════════════════════════ #}
+      <!-- Coluna do formulário -->
       <div class="col-12 col-lg-8">
-        <div class="sheet p-3 p-md-4">
+        <div class="p-3">
+          <!-- FORM DE EDIÇÃO — agora com id para referência externa -->
           <form method="post"
-                action="{{ url_for('visitor.visitor_edit_post', visitor_id=visitor.id) }}">
-
-            <div class="row g-3">
-
-              {# Categoria (100% dinâmica; se não houver categorias, usa padrão "civil" oculto) #}
+                action="{{ url_for('visitor.visitor_edit_post', visitor_id=visitor.id) }}"
+                id="visitor-edit-form">
+            <div class="row wizard-form-row">
               <div class="col-12">
                 <label class="form-label">Categoria</label>
                 {{ visitor_category.radio_selector(visitor_categories, visitor.category_id, 'category_id', 'edit-cat') }}
               </div>
-
-
-              {# Campos obrigatórios e opcionais #}
-
-              {# Nome completo #}
               <div class="col-12">
-                <label class="form-label">
-                  Nome Completo <span class="text-danger">*</span>
-                </label>
-                <input class="form-control form-control-lg text-uppercase"
-                       name="name"
-                       required
-                       value="{{ visitor.name }}"
-                       placeholder="Nome completo do visitante">
+                <label class="form-label">Nome completo <span class="text-danger">*</span></label>
+                <input class="form-control text-uppercase-input" name="name" required value="{{ visitor.name }}">
               </div>
-
-              {# CPF (readonly) #}
               <div class="col-12 col-md-6">
                 <label class="form-label">CPF</label>
-                <input class="form-control form-control-lg bg-light"
-                       value="{{ visitor.cpf }}" readonly disabled>
-                <div class="form-text">CPF não pode ser alterado.</div>
+                <input class="form-control bg-light" value="{{ visitor.cpf }}" readonly disabled>
+                <div class="muted">CPF não pode ser alterado.</div>
               </div>
-
-              {# Telefone #}
               <div class="col-12 col-md-6">
                 <label class="form-label">Telefone <span class="text-danger">*</span></label>
-                <input class="form-control form-control-lg"
-                       name="phone" required
-                       value="{{ visitor.phone }}"
-                       inputmode="tel"
-                       placeholder="(DDD) 0 0000-0000">
+                <input class="form-control" name="phone" required value="{{ visitor.phone }}" inputmode="tel">
               </div>
-
-              {# Filiação #}
               <div class="col-12 col-md-6">
                 <label class="form-label">Nome da Mãe <span class="text-danger">*</span></label>
-                <input class="form-control form-control-lg text-uppercase"
-                       name="mom_name" required
-                       value="{{ visitor.mom_name }}">
+                <input class="form-control text-uppercase-input" name="mom_name" required value="{{ visitor.mom_name }}">
               </div>
-
               <div class="col-12 col-md-6">
                 <label class="form-label">Nome do Pai</label>
-                <input class="form-control form-control-lg text-uppercase"
-                       name="father_name"
-                       value="{{ visitor.father_name or '' }}">
+                <input class="form-control text-uppercase-input" name="father_name" value="{{ visitor.father_name or '' }}">
               </div>
-
-              {# E-mail + Empresa #}
               <div class="col-12 col-md-6">
                 <label class="form-label">E-mail</label>
-                <input class="form-control form-control-lg text-lowercase"
-                       type="email" name="email"
-                       value="{{ visitor.email or '' }}"
-                       placeholder="@email.com">
+                <input class="form-control" type="email" name="email"
+                       value="{{ visitor.email or '' }}" style="text-transform:lowercase;">
               </div>
-
               <div class="col-12 col-md-6">
                 <label class="form-label">Empresa / Vínculo / OM</label>
-                <input class="form-control form-control-lg text-uppercase"
-                       name="empresa"
-                       value="{{ visitor.empresa or '' }}"
-                       placeholder="">
-              </div>
-
-              {# Botões #}
-              <div class="col-12 d-flex justify-content-end gap-2 pt-2">
-                <div class="form-text">O (*) indica um campo obrigatório.</div>
-                <a class="btn btn-outline-secondary"
-                   href="{{ url_for('visitor.checkin_form', visitor_id=visitor.id) }}">Cancelar</a>
-                <button class="btn btn-success btn-lg" type="submit">
-                  <i class="bi bi-check-lg me-1"></i>Salvar ficha
-                </button>
+                <input class="form-control text-uppercase-input" name="empresa" value="{{ visitor.empresa or '' }}">
               </div>
             </div>
           </form>
+          <!-- FIM DO FORM DE EDIÇÃO -->
 
-          {# ── Zona de perigo ──────────────────────────────────────── #}
-          <hr class="my-4">
-          <form method="post"
-                action="{{ url_for('visitor.visitor_delete', visitor_id=visitor.id) }}"
-                onsubmit="return confirmAction(event, 'Excluir este visitante permanentemente? Todos os registros de visita serão apagados.')">
-            <button type="submit" class="btn btn-outline-danger btn-sm">
-              <i class="bi bi-trash me-1"></i>Excluir visitante
-            </button>
-          </form>
+          <!-- Barra de ações FORA do form, evitando aninhamento -->
+          <div class="d-flex justify-content-between pt-3 mt-2 border-top">
+            <!-- Form de exclusão independente -->
+            <form method="post"
+                  action="{{ url_for('visitor.visitor_delete', visitor_id=visitor.id) }}"
+                  onsubmit="return confirmAction(event, 'Excluir este visitante permanentemente?')">
+              <button type="submit" class="btn btn-outline-danger btn-sm">
+                <i class="bi bi-trash me-1"></i>Excluir
+              </button>
+            </form>
 
-        </div>{# /sheet #}
-      </div>{# /col-lg-8 #}
+            <div class="d-flex gap-2">
+              <a class="btn btn-outline-secondary btn-sm"
+                 href="{{ url_for('visitor.checkin_form', visitor_id=visitor.id) }}">Cancelar</a>
+              <!-- type="submit" com form="..." vincula ao form de edição -->
+              <button class="btn btn-olive btn-sm" type="submit" form="visitor-edit-form">
+                <i class="bi bi-check-lg me-1"></i>Salvar
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
-    </div>{# /row #}
-
-  </div>{# /card-body #}
-</div>{# /center-card #}
+</div>
 {% endblock %}
 
 {% block scripts %}
-{# Pré-carregamento do modelo de detecção facial (global) #}
 <script src="{{ url_for('static', filename='js/face-preloader.js') }}"></script>
-
 <script src="/static/js/face-cropper.js"></script>
 <script src="/static/js/camera.js"></script>
 <script>
 (function() {
-  const btnOpen      = document.getElementById('btn-open-camera');
-  const btnCancel    = document.getElementById('btn-cancel-camera');
-  const photoWrapper = document.getElementById('current-photo-wrapper');
-  const camWrapper   = document.getElementById('camera-wrapper');
-  const btnSaveWrap  = document.getElementById('btn-save-photo-wrapper');
-  const btnCapture   = document.getElementById('btn-capture');
-  const btnRetake    = document.getElementById('btn-retake');
+  const btnOpen=document.getElementById('btn-open-camera');
+  const btnCancel=document.getElementById('btn-cancel-camera');
+  const photoWrapper=document.getElementById('current-photo-wrapper');
+  const camWrapper=document.getElementById('camera-wrapper');
+  const btnSaveWrap=document.getElementById('btn-save-photo-wrapper');
+  const btnCapture=document.getElementById('btn-capture');
+  const btnRetake=document.getElementById('btn-retake');
+  if(!btnOpen)return;
 
-  if (!btnOpen) return;
-
-  btnOpen.addEventListener('click', function() {
-    photoWrapper.style.display = 'none';
-    camWrapper.style.display   = 'block';
+  btnOpen.addEventListener('click',function(){
+    photoWrapper.style.display='none';
+    camWrapper.style.display='block';
     window.dispatchEvent(new Event('sisport:open-camera'));
   });
 
-  btnCancel.addEventListener('click', function() {
-    // ── 1. Para o Face Cropper ──
-    if (window.FaceCropper) window.FaceCropper.stop();
-
-    // ── 2. Para TODAS as tracks do stream e limpa o srcObject ──
-    var video = document.getElementById('cam-video');
-    if (video && video.srcObject) {
-      video.srcObject.getTracks().forEach(function(t) { t.stop(); });
-      video.srcObject = null;
+  btnCancel.addEventListener('click',function(){
+    if(window.FaceCropper)window.FaceCropper.stop();
+    var video=document.getElementById('cam-video');
+    if(video&&video.srcObject){
+      video.srcObject.getTracks().forEach(function(t){t.stop();});
+      video.srcObject=null;
     }
-
-    // ── 3. Reseta a visibilidade do vídeo/canvas ──
-    var canvas = document.getElementById('cam-canvas');
-    if (video)  video.style.display  = 'block';
-    if (canvas) canvas.style.display = 'none';
-
-    // ── 4. Reseta o container (borda, loading, error) ──
-    var container = document.getElementById('camera-container');
-    if (container) {
-      container.classList.remove('border-success');
-      container.classList.add('border-secondary');
-      container.style.borderWidth = '';
-    }
-
-    var loading = document.getElementById('cam-loading');
-    if (loading) {
-      loading.classList.remove('d-flex');
-      loading.classList.add('d-none');
-      loading.style.display = '';
-    }
-
-    var error = document.getElementById('cam-error');
-    if (error) {
-      error.classList.remove('d-flex');
-      error.classList.add('d-none');
-    }
-
-    // ── 5. Reseta botões da câmera ──
-    if (btnCapture) { btnCapture.style.display = 'block'; btnCapture.disabled = true; }
-    if (btnRetake)  btnRetake.style.display = 'none';
-    btnSaveWrap.style.display = 'none';
-
-    // ── 6. Limpa o input hidden da foto ──
-    var hiddenInput = document.getElementById('photo_data_url');
-    if (hiddenInput) hiddenInput.value = '';
-
-    // ── 7. Remove o botão "Tentar novamente" se existir ──
-    var restartBtn = document.getElementById('btn-restart-camera');
-    if (restartBtn) restartBtn.style.display = 'none';
-
-    // ── 8. Esconde o overlay do face cropper se existir ──
-    var fcCanvas = container ? container.querySelector('canvas:not(#cam-canvas)') : null;
-    if (fcCanvas) fcCanvas.style.display = 'none';
-
-    // ── 9. Alterna os wrappers ──
-    camWrapper.style.display   = 'none';
-    photoWrapper.style.display = 'block';
+    var canvas=document.getElementById('cam-canvas');
+    if(video)video.style.display='block';
+    if(canvas)canvas.style.display='none';
+    var container=document.getElementById('camera-container');
+    if(container){container.classList.remove('border-success');container.classList.add('border-secondary');}
+    var loading=document.getElementById('cam-loading');
+    if(loading)loading.style.display='';
+    var error=document.getElementById('cam-error');
+    if(error)error.style.display='none';
+    if(btnCapture){btnCapture.style.display='block';btnCapture.disabled=true;}
+    if(btnRetake)btnRetake.style.display='none';
+    btnSaveWrap.style.display='none';
+    var hiddenInput=document.getElementById('photo_data_url');
+    if(hiddenInput)hiddenInput.value='';
+    camWrapper.style.display='none';
+    photoWrapper.style.display='block';
   });
 
-  if (btnCapture) {
-    btnCapture.addEventListener('click', function() {
-      setTimeout(function() {
-        if (document.getElementById('photo_data_url').value) {
-          btnSaveWrap.style.display = 'block';
+  if(btnCapture){
+    btnCapture.addEventListener('click',function(){
+      setTimeout(function(){
+        if(document.getElementById('photo_data_url').value){
+          btnSaveWrap.style.display='block';
         }
-      }, 100);
+      },100);
     });
   }
-
-  if (btnRetake) {
-    btnRetake.addEventListener('click', function() {
-      btnSaveWrap.style.display = 'none';
+  if(btnRetake){
+    btnRetake.addEventListener('click',function(){
+      btnSaveWrap.style.display='none';
     });
   }
 })();

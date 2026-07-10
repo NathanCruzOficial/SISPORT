@@ -1,91 +1,118 @@
-<form method="post" action="{{ url_for('admin.save_database') }}" id="retention-form">
-  <div class="text-muted small mb-3">
-    A limpeza é baseada na <strong>última saída</strong> registrada (checkout).
-    Visitantes com <strong>visita em aberto</strong> não são afetados.
-    <strong>0</strong> desativa a limpeza automática.
-  </div>
+<style>
+  .db-sec { font-size: .7rem; color: var(--text-main); }
+  .db-sec label { font-size: .64rem; font-weight: 600; margin-bottom: .1rem; }
+  .db-sec .form-control,
+  .db-sec .form-select { font-size: .66rem; padding: .22rem .45rem; border-radius: 5px; }
+  .db-sec .form-check { font-size: .64rem; padding-left: 1.2rem; margin-bottom: .1rem; }
+  .db-sec .form-check-input { width: .8rem; height: .8rem; }
+  .db-sec .form-check-label { font-size: .63rem; }
+  .db-sec .form-text { font-size: .56rem; color: var(--text-muted); }
 
-  <div class="row g-3 align-items-end">
-    <div class="col-12 col-md-4">
-      <label class="form-label fw-semibold small" for="retention_days">Dias de retenção (0–999)</label>
-      <input id="retention_days" name="retention_days" type="number"
-             min="0" max="999" step="1" class="form-control"
-             value="{{ settings.retention_days }}" required>
-      <div class="form-text">Ex.: 30 → após 30 dias sem saída registrada</div>
+  .db-summary {
+    padding: .3rem .5rem; border-radius: 5px;
+    background: var(--olive-100); border: 1px solid rgba(74,93,35,.12);
+    font-size: .6rem; color: var(--olive-900); line-height: 1.35;
+  }
+
+  .db-sim-row {
+    display: flex; align-items: center; gap: .5rem; flex-wrap: wrap;
+    padding: .35rem .55rem; border-radius: 5px;
+    background: var(--bg-footer); border: 1px solid rgba(0,0,0,.04);
+    font-size: .63rem;
+  }
+  .db-sim-row strong { color: var(--olive-700); font-weight: 700; }
+
+  .db-btn {
+    font-size: .62rem; font-weight: 600;
+    padding: .22rem .5rem; border-radius: 5px;
+    display: inline-flex; align-items: center; gap: .25rem;
+    border: none; cursor: pointer;
+  }
+  .db-btn-olive {
+    background: var(--olive-700); border: 1px solid var(--olive-700); color: #fff;
+  }
+  .db-btn-olive:hover { background: var(--olive-900); border-color: var(--olive-900); color: #fff; }
+  .db-btn-outline {
+    background: transparent; border: 1px solid rgba(0,0,0,.1); color: var(--text-main);
+  }
+  .db-btn-outline:hover { border-color: var(--olive-700); color: var(--olive-700); }
+  .db-btn-danger {
+    background: transparent; border: 1px solid rgba(185,28,28,.2); color: var(--danger);
+  }
+  .db-btn-danger:hover { background: rgba(185,28,28,.06); border-color: var(--danger); }
+</style>
+
+<div class="db-sec">
+  <form method="post" action="{{ url_for('admin.save_database') }}" id="retention-form">
+    <div class="text-muted mb-2" style="font-size:.6rem;">
+      Limpeza pela <strong>última saída</strong> (checkout). <strong>0</strong> = desativado.
+      Visitas em aberto não são afetadas.
     </div>
 
-    <div class="col-12 col-md-8">
-      <div class="fw-semibold small mb-2">Ação ao expirar</div>
+    <div class="row g-2 align-items-start">
+      {# Coluna esquerda: dias #}
+      <div class="col-12 col-md-4">
+        <label for="retention_days">Dias de retenção (0–999)</label>
+        <input id="retention_days" name="retention_days" type="number"
+               min="0" max="999" step="1" class="form-control"
+               value="{{ settings.retention_days }}" required>
+        <div class="form-text">Ex.: 30 → após 30 dias sem saída</div>
+      </div>
 
-      <div class="vstack gap-2">
-        <label class="form-check">
-          <input class="form-check-input" type="radio" name="retention_action"
-                 id="action_delete" value="delete"
-                 {% if settings.retention_action == 'delete' %}checked{% endif %}>
-          <span class="form-check-label">
-            <strong>Apagar definitivamente</strong>
-            <div class="text-muted small">Remove dados do banco e apaga a foto do disco (economiza armazenamento).</div>
-          </span>
-        </label>
-
-        <label class="form-check">
-          <input class="form-check-input" type="radio" name="retention_action"
-                 id="action_anonymize" value="anonymize"
-                 {% if settings.retention_action == 'anonymize' %}checked{% endif %}>
-          <span class="form-check-label">
-            <strong>Anonimizar</strong>
-            <div class="text-muted small">Remove dados pessoais e pode remover a foto; mantém registros de visita.</div>
-          </span>
-        </label>
-
-        <div id="anonymize_opts" class="ms-4"
-             style="{% if settings.retention_action != 'anonymize' %}display:none{% endif %}">
-          <label class="form-check">
-            <input class="form-check-input" type="checkbox" name="anonymize_delete_photo"
-                   id="anonymize_delete_photo" value="1"
-                   {% if settings.anonymize_delete_photo %}checked{% endif %}>
+      {# Coluna direita: ação + resumo #}
+      <div class="col-12 col-md-8">
+        <div style="font-size:.64rem;font-weight:700;margin-bottom:.2rem;">Ação ao expirar</div>
+        <div class="d-flex gap-3 flex-wrap align-items-start">
+          <label class="form-check mb-0">
+            <input class="form-check-input" type="radio" name="retention_action"
+                   id="action_delete" value="delete"
+                   {% if settings.retention_action == 'delete' %}checked{% endif %}>
             <span class="form-check-label">
-              Apagar foto ao anonimizar
-              <div class="text-muted small">Recomendado para reduzir disco.</div>
+              <strong>Apagar</strong>
+              <div class="text-muted" style="font-size:.56rem;">Remove dados e foto.</div>
             </span>
           </label>
+          <label class="form-check mb-0">
+            <input class="form-check-input" type="radio" name="retention_action"
+                   id="action_anonymize" value="anonymize"
+                   {% if settings.retention_action == 'anonymize' %}checked{% endif %}>
+            <span class="form-check-label">
+              <strong>Anonimizar</strong>
+              <div class="text-muted" style="font-size:.56rem;">Remove dados pessoais.</div>
+            </span>
+          </label>
+          <div id="anonymize_opts"
+               style="{% if settings.retention_action != 'anonymize' %}display:none{% endif %}">
+            <label class="form-check mb-0">
+              <input class="form-check-input" type="checkbox" name="anonymize_delete_photo"
+                     id="anonymize_delete_photo" value="1"
+                     {% if settings.anonymize_delete_photo %}checked{% endif %}>
+              <span class="form-check-label">Apagar foto ao anonimizar</span>
+            </label>
+          </div>
         </div>
-      </div>
 
-      <div class="alert alert-info mt-3 mb-0">
-        <div class="fw-semibold mb-1">Resumo da regra</div>
-        <div class="small" id="rule_summary"></div>
+        <div class="db-summary mt-2" id="rule_summary"></div>
       </div>
     </div>
-  </div>
 
-  <div class="mt-3 text-end">
-    <button type="submit" class="btn btn-primary btn-sm">
-      <i class="bi bi-check-lg me-1"></i>Salvar
-    </button>
-  </div>
-</form>
-
-<hr class="my-3">
-
-<div class="d-flex flex-column flex-md-row align-items-md-center gap-3">
-  <div>
-    <h6 class="mb-1">Simulação</h6>
-    <div class="text-muted small">
-      Estimativa de quantos visitantes seriam afetados se a limpeza rodasse agora.
+    {# Barra inferior: simulação + botões #}
+    <div class="db-sim-row mt-2">
+      <span style="font-size:.6rem;color:var(--text-muted);">Afetados agora:</span>
+      <strong id="sim_result">—</strong>
+      <button class="btn db-btn db-btn-outline" type="button" id="btnRecalc" title="Recalcular">
+        <i class="bi bi-arrow-clockwise me-1"></i>Recalcular
+      </button>
+      <button class="btn db-btn db-btn-danger" type="button" id="btnRunNow">
+        <i class="bi bi-trash3 me-1"></i>Executar agora
+      </button>
+      <div class="ms-auto">
+        <button type="submit" class="btn db-btn db-btn-olive">
+          <i class="bi bi-check-lg me-1"></i>Salvar
+        </button>
+      </div>
     </div>
-  </div>
-
-  <div class="d-flex gap-2 align-items-center ms-md-auto">
-    <button class="btn btn-outline-primary btn-sm" type="button" id="btnRecalc">
-      <i class="bi bi-calculator me-1"></i>Recalcular
-    </button>
-    <span class="small">Resultado: <strong id="sim_result">—</strong></span>
-  </div>
-
-  <button class="btn btn-outline-danger btn-sm" type="button" id="btnRunNow">
-    <i class="bi bi-trash3 me-1"></i>Executar limpeza agora
-  </button>
+  </form>
 </div>
 
 <script>
@@ -100,9 +127,7 @@
   const btnRecalc = document.getElementById("btnRecalc");
   const btnRunNow = document.getElementById("btnRunNow");
 
-  function action(){
-    return anonymRadio.checked ? "anonymize" : "delete";
-  }
+  function action(){ return anonymRadio.checked ? "anonymize" : "delete"; }
 
   function updateAnonymizeVisibility(){
     anonymOpts.style.display = anonymRadio.checked ? "block" : "none";
@@ -115,21 +140,23 @@
       return;
     }
     summary.innerText =
-      `Após ${n} dia(s) desde a última saída (checkout), visitantes elegíveis serão ` +
-      (action() === "delete" ? "apagados definitivamente" : "anonimizados") +
-      ". Visitantes com visita em aberto não serão afetados.";
+      `Após ${n} dia(s) sem saída → ` +
+      (action() === "delete" ? "apagar definitivamente" : "anonimizar") +
+      ". Visitas em aberto não afetadas.";
   }
 
   async function simulate(){
     const n = parseInt(days.value || "0", 10);
-    simResult.innerText = "calculando...";
-    const resp = await fetch("{{ url_for('admin.settings_retention_simulate') }}", {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({ retention_days: n })
-    });
-    const data = await resp.json();
-    simResult.innerText = resp.ok ? data.count : "erro";
+    simResult.innerText = "...";
+    try {
+      const resp = await fetch("{{ url_for('admin.settings_retention_simulate') }}", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ retention_days: n })
+      });
+      const data = await resp.json();
+      simResult.innerText = resp.ok ? data.count : "erro";
+    } catch(e) { simResult.innerText = "erro"; }
   }
 
   async function runNow(){

@@ -1,66 +1,53 @@
 {% macro category_form_fields(color_presets, cat=None) %}
-  <div class="mb-3">
-    <label class="form-label small fw-semibold">Nome</label>
-    <input type="text" name="label" class="form-control"
+  <div class="vc-field">
+    <label class="vc-label">Nome</label>
+    <input type="text" name="label" class="vc-input"
            value="{{ cat.label if cat else '' }}" required
            placeholder="Ex: Prestador de Serviço">
   </div>
 
-  <div class="mb-3">
-    <label class="form-label small fw-semibold">Ícone (Bootstrap Icons)</label>
-    <div class="input-group">
-      <span class="input-group-text">
+  <div class="vc-field">
+    <label class="vc-label">Ícone (Bootstrap Icons)</label>
+    <div class="vc-input-group">
+      <span class="vc-input-group-icon">
         <i class="bi {{ cat.icon if cat else 'bi-tag' }}"></i>
       </span>
-      <input type="text" name="icon" class="form-control font-monospace"
+      <input type="text" name="icon" class="vc-input vc-input-mono"
              value="{{ cat.icon if cat else 'bi-tag' }}"
              placeholder="bi-person">
     </div>
-    <div class="form-text">
-      Veja os nomes em
-      <a href="https://icons.getbootstrap.com/" target="_blank">icons.getbootstrap.com</a>
-      Ex: bi-shield, bi-tools.
+    <div class="vc-hint">
+      Veja nomes em <a href="https://icons.getbootstrap.com/" target="_blank">icons.getbootstrap.com</a>
     </div>
   </div>
 
-  <div class="mb-2">
-    <label class="form-label small fw-semibold">Cor</label>
-
-    <div class="d-flex flex-wrap gap-2">
+  <div class="vc-field">
+    <label class="vc-label">Cor</label>
+    <div class="vc-color-grid">
       {% for name, btn, badge in color_presets %}
-      <label class="d-flex align-items-center gap-1 border rounded px-2 py-1" style="cursor:pointer">
-        <input type="radio"
-               name="color_combo"
+      <label class="vc-color-option">
+        <input type="radio" name="color_combo"
                value="{{ btn }}|{{ badge }}"
                {% if (cat and cat.btn_class == btn) or (not cat and loop.first) %}checked{% endif %}>
-        <span class="badge {{ badge }}">{{ name }}</span>
+        <span class="vc-color-chip {{ badge }}">{{ name }}</span>
       </label>
       {% endfor %}
     </div>
   </div>
 
-  <input type="hidden"
-         name="btn_class"
+  <input type="hidden" name="btn_class"
          value="{{ cat.btn_class if cat else 'btn-outline-secondary' }}">
-
-  <input type="hidden"
-         name="badge_class"
+  <input type="hidden" name="badge_class"
          value="{{ cat.badge_class if cat else 'bg-secondary' }}">
 
   {% if cat %}
-  <div class="form-check mt-3">
-    <input class="form-check-input"
-           type="checkbox"
-           name="is_active"
-           id="active{{ cat.id }}"
+  <label class="vc-switch">
+    <input class="vc-switch-input" type="checkbox" name="is_active"
            {% if cat.is_active %}checked{% endif %}>
-    <label class="form-check-label" for="active{{ cat.id }}">
-      Ativa
-    </label>
-  </div>
+    <span class="vc-switch-label">Ativa</span>
+  </label>
   {% endif %}
 {% endmacro %}
-
 
 {% set color_presets = [
   ('Cinza',    'btn-outline-secondary', 'bg-secondary'),
@@ -72,107 +59,397 @@
   ('Escuro',   'btn-outline-dark',      'bg-dark'),
 ] %}
 
+<style>
+  .vis-section { font-size: .72rem; color: var(--text-main); }
+  .vis-section .text-muted { color: var(--text-muted) !important; font-size: .65rem; }
 
-<div class="card border-0">
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <label class="form-label fw-semibold mb-0">Categorias de Visitante</label>
+  /* ── Header da seção ── */
+  .vc-head {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    margin-bottom: .5rem;
+  }
+  .vc-head-icon {
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    background: var(--olive-100);
+    color: var(--olive-700);
+    display: inline-flex;
+    align-items: center; justify-content: center;
+    font-size: .9rem;
+    flex-shrink: 0;
+  }
+  .vc-head-title {
+    font-size: .74rem;
+    font-weight: 700;
+    color: var(--text-main);
+  }
+  .vc-head-sub {
+    font-size: .6rem;
+    color: var(--text-muted);
+  }
 
-    <button type="button"
-            class="btn btn-success btn-sm"
-            data-bs-toggle="modal"
-            data-bs-target="#modalNovaCategoria">
+  /* ── Lista de categorias ── */
+  .vc-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    background: var(--bg-footer);
+    border: 1px solid rgba(0,0,0,.05);
+    border-radius: 8px;
+    padding: 4px;
+  }
+  .vc-item {
+    display: flex;
+    align-items: center;
+    gap: .45rem;
+    padding: .4rem .55rem;
+    background: var(--bg-card);
+    border-radius: 6px;
+    transition: background .15s;
+  }
+  .vc-item:hover { background: rgba(74,93,35,.025); }
+  .vc-item.drag-ghost { opacity: .5; }
+
+  .vc-drag {
+    cursor: grab;
+    color: var(--text-muted);
+    font-size: .85rem;
+    opacity: .5;
+    transition: opacity .15s;
+  }
+  .vc-item:hover .vc-drag { opacity: 1; color: var(--olive-700); }
+
+  .vc-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-size: .6rem;
+    font-weight: 600;
+    line-height: 1.3;
+  }
+  .vc-code {
+    font-size: .58rem;
+    color: var(--text-muted);
+    font-family: monospace;
+    background: rgba(0,0,0,.03);
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+  .vc-count {
+    font-size: .58rem;
+    color: var(--text-muted);
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+  }
+  .vc-inactive-tag {
+    font-size: .52rem;
+    font-weight: 600;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: rgba(0,0,0,.04);
+    color: var(--text-muted);
+    text-transform: uppercase;
+  }
+
+  .vc-actions {
+    display: flex;
+    gap: 3px;
+    margin-left: auto;
+  }
+  .vc-icon-btn {
+    width: 24px; height: 24px;
+    border-radius: 5px;
+    border: 1px solid rgba(0,0,0,.08);
+    background: transparent;
+    color: var(--text-muted);
+    display: inline-flex;
+    align-items: center; justify-content: center;
+    font-size: .65rem;
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .vc-icon-btn:hover { border-color: var(--olive-700); color: var(--olive-700); }
+  .vc-icon-btn-danger:hover { border-color: var(--danger); color: var(--danger); }
+
+  .vc-empty {
+    padding: 1.2rem 1rem;
+    text-align: center;
+    font-size: .65rem;
+    color: var(--text-muted);
+  }
+
+  .vc-hint-bottom {
+    font-size: .6rem;
+    color: var(--text-muted);
+    margin-top: .4rem;
+    display: flex;
+    align-items: center;
+    gap: .3rem;
+  }
+
+  /* ── Botões ── */
+  .vis-btn-primary {
+    background: var(--olive-700);
+    border-color: var(--olive-700);
+    color: #fff;
+    font-size: .66rem;
+    font-weight: 600;
+    padding: .28rem .65rem;
+    border-radius: 6px;
+  }
+  .vis-btn-primary:hover { background: var(--olive-900); border-color: var(--olive-900); color: #fff; }
+
+  /* ── Modais compactos ── */
+  .vc-modal .modal-content {
+    border-radius: 8px;
+    border: 1px solid rgba(0,0,0,.08);
+    font-size: .72rem;
+  }
+  .vc-modal .modal-header {
+    padding: .55rem .75rem;
+    background: var(--bg-footer);
+    border-bottom: 1px solid rgba(0,0,0,.05);
+  }
+  .vc-modal .modal-title { font-size: .74rem; font-weight: 700; }
+  .vc-modal .modal-body { padding: .7rem .75rem; }
+  .vc-modal .modal-footer {
+    padding: .5rem .75rem;
+    background: var(--bg-footer);
+    border-top: 1px solid rgba(0,0,0,.05);
+  }
+  .vc-modal .btn-close { font-size: .55rem; }
+  .vc-modal .modal-dialog { max-width: 420px; }
+
+  .vc-field { margin-bottom: .55rem; }
+  .vc-label {
+    display: block;
+    font-size: .65rem;
+    font-weight: 700;
+    color: var(--text-main);
+    margin-bottom: .15rem;
+  }
+  .vc-input {
+    width: 100%;
+    font-size: .7rem;
+    padding: .3rem .5rem;
+    border: 1px solid var(--border, rgba(0,0,0,.12));
+    border-radius: 6px;
+    background: var(--bg-card, #fff);
+    color: var(--text-main);
+  }
+  .vc-input:focus {
+    outline: none;
+    border-color: var(--olive-700);
+    box-shadow: 0 0 0 2px rgba(74,93,35,.1);
+  }
+  .vc-input-mono { font-family: monospace; }
+  .vc-input-group {
+    display: flex;
+    align-items: stretch;
+  }
+  .vc-input-group-icon {
+    display: flex;
+    align-items: center;
+    padding: 0 .5rem;
+    background: var(--bg-footer);
+    border: 1px solid var(--border, rgba(0,0,0,.12));
+    border-right: none;
+    border-radius: 6px 0 0 6px;
+    font-size: .75rem;
+    color: var(--olive-700);
+  }
+  .vc-input-group .vc-input { border-radius: 0 6px 6px 0; }
+  .vc-hint {
+    font-size: .58rem;
+    color: var(--text-muted);
+    margin-top: .15rem;
+  }
+  .vc-hint a { color: var(--olive-700); }
+
+  .vc-color-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .vc-color-option {
+    cursor: pointer;
+    display: inline-flex;
+  }
+  .vc-color-option input { display: none; }
+  .vc-color-chip {
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: .58rem;
+    font-weight: 600;
+    border: 2px solid transparent;
+    transition: border-color .15s;
+  }
+  .vc-color-option input:checked + .vc-color-chip {
+    border-color: var(--olive-700);
+  }
+
+  .vc-switch {
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+    margin-top: .4rem;
+    cursor: pointer;
+  }
+  .vc-switch-input {
+    width: 1rem; height: 1rem;
+    cursor: pointer;
+  }
+  .vc-switch-input:checked {
+    background-color: var(--olive-700);
+    border-color: var(--olive-700);
+  }
+  .vc-switch-label { font-size: .68rem; font-weight: 600; }
+
+  /* ── Modal delete (perigo) ── */
+  .vc-modal-danger .modal-header {
+    background: rgba(185,28,28,.06);
+    border-bottom-color: rgba(185,28,28,.12);
+  }
+  .vc-modal-danger .modal-title { color: var(--danger); }
+  .vc-alert-warn {
+    padding: .4rem .6rem;
+    border-radius: 6px;
+    font-size: .62rem;
+    background: rgba(180,83,9,.06);
+    border: 1px solid rgba(180,83,9,.15);
+    color: #6B5B45;
+    margin-bottom: .5rem;
+  }
+  .vc-alert-danger {
+    padding: .4rem .6rem;
+    border-radius: 6px;
+    font-size: .62rem;
+    background: rgba(185,28,28,.05);
+    border: 1px solid rgba(185,28,28,.12);
+    color: var(--danger);
+    margin-bottom: .5rem;
+  }
+  .btn-vc-secondary {
+    background: transparent;
+    border: 1px solid rgba(0,0,0,.1);
+    color: var(--text-main);
+    font-size: .64rem;
+    font-weight: 600;
+    padding: .25rem .6rem;
+    border-radius: 6px;
+  }
+  .btn-vc-secondary:hover { border-color: var(--olive-700); color: var(--olive-700); }
+  .btn-vc-success {
+    background: var(--olive-700);
+    border-color: var(--olive-700);
+    color: #fff;
+    font-size: .64rem;
+    font-weight: 600;
+    padding: .25rem .6rem;
+    border-radius: 6px;
+  }
+  .btn-vc-success:hover { background: var(--olive-900); border-color: var(--olive-900); color: #fff; }
+  .btn-vc-danger {
+    background: var(--danger);
+    border-color: var(--danger);
+    color: #fff;
+    font-size: .64rem;
+    font-weight: 600;
+    padding: .25rem .6rem;
+    border-radius: 6px;
+  }
+  .btn-vc-danger:hover { opacity: .9; color: #fff; }
+  .btn-vc-danger:disabled { opacity: .5; cursor: not-allowed; }
+</style>
+
+<div class="vis-section">
+  <div class="vc-head">
+    <span class="vc-head-icon"><i class="bi bi-tags"></i></span>
+    <div class="flex-fill">
+      <div class="vc-head-title">Categorias de Visitante</div>
+      <div class="vc-head-sub">Arraste para reordenar. A ordem define a exibição no cadastro.</div>
+    </div>
+    <button type="button" class="vis-btn-primary"
+            data-bs-toggle="modal" data-bs-target="#modalNovaCategoria">
       <i class="bi bi-plus-lg me-1"></i>Nova
     </button>
   </div>
 
-  <ul class="list-group" id="categoriesSortable">
+  <div class="vc-list" id="categoriesSortable">
     {% for cat in visitor_categories_full %}
     {% set cat_visitor_count = visitor_counts.get(cat.id, 0) %}
-    <li class="list-group-item d-flex align-items-center gap-2"
-        data-cat-id="{{ cat.id }}">
+    <div class="vc-item" data-cat-id="{{ cat.id }}">
+      <i class="bi bi-grip-vertical vc-drag"></i>
 
-      <i class="bi bi-grip-vertical text-muted" style="cursor:grab"></i>
-
-      <span class="badge {{ cat.badge_class }}">
-        <i class="bi {{ cat.icon }} me-1"></i>{{ cat.label }}
+      <span class="vc-badge {{ cat.badge_class }}">
+        <i class="bi {{ cat.icon }}"></i>{{ cat.label }}
       </span>
 
-      <code class="small text-muted ms-1">{{ cat.value }}</code>
+      <span class="vc-code">{{ cat.value }}</span>
 
       {% if not cat.is_active %}
-        <span class="badge bg-light text-muted border">inativa</span>
+        <span class="vc-inactive-tag">inativa</span>
       {% endif %}
 
-      <span class="badge bg-light text-muted ms-1"
-            title="{{ cat_visitor_count }} visitante(s) nesta categoria">
-        <i class="bi bi-people me-1"></i>{{ cat_visitor_count }}
+      <span class="vc-count" title="{{ cat_visitor_count }} visitante(s)">
+        <i class="bi bi-people"></i>{{ cat_visitor_count }}
       </span>
 
-      <div class="ms-auto d-flex gap-1">
-
-        <button type="button"
-                class="btn btn-outline-primary btn-sm"
-                data-bs-toggle="modal"
-                data-bs-target="#modalEditCat{{ cat.id }}">
+      <div class="vc-actions">
+        <button type="button" class="vc-icon-btn"
+                data-bs-toggle="modal" data-bs-target="#modalEditCat{{ cat.id }}"
+                title="Editar">
           <i class="bi bi-pencil"></i>
         </button>
-
-        <form method="post"
-              class="d-inline"
+        <form method="post" class="d-inline m-0"
               action="{{ url_for('admin.toggle_visitor_category', cat_id=cat.id) }}">
-          <button class="btn btn-outline-secondary btn-sm"
-                  type="submit"
+          <button class="vc-icon-btn" type="submit"
                   title="{{ 'Desativar' if cat.is_active else 'Ativar' }}">
             <i class="bi {{ 'bi-eye' if cat.is_active else 'bi-eye-slash' }}"></i>
           </button>
         </form>
-
-        {# ── Botão de deletar: abre modal ao invés de confirm simples ── #}
-        <button type="button"
-                class="btn btn-outline-danger btn-sm"
-                data-bs-toggle="modal"
-                data-bs-target="#modalDeleteCat{{ cat.id }}"
-                title="Deletar categoria">
+        <button type="button" class="vc-icon-btn vc-icon-btn-danger"
+                data-bs-toggle="modal" data-bs-target="#modalDeleteCat{{ cat.id }}"
+                title="Deletar">
           <i class="bi bi-trash"></i>
         </button>
-
       </div>
-    </li>
+    </div>
     {% else %}
-    <li class="list-group-item text-muted">
+    <div class="vc-empty">
+      <i class="bi bi-tags" style="font-size:1rem;opacity:.4;display:block;margin-bottom:.2rem;"></i>
       Nenhuma categoria cadastrada.
-    </li>
+    </div>
     {% endfor %}
-  </ul>
+  </div>
 
-  <div class="form-text mt-2">
-    Arraste pelo <i class="bi bi-grip-vertical"></i> para reordenar.
-    A ordem define como aparecem no cadastro de visitantes.
+  <div class="vc-hint-bottom">
+    <i class="bi bi-info-circle"></i>
+    Arraste pelo <i class="bi bi-grip-vertical"></i> para reordenar as categorias.
   </div>
 </div>
 
 
-<!-- Modal: Nova Categoria -->
-<div class="modal fade" id="modalNovaCategoria" tabindex="-1">
-  <div class="modal-dialog">
+<!-- ═══ Modal: Nova Categoria ═══ -->
+<div class="modal fade vc-modal" id="modalNovaCategoria" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
     <form method="post" action="{{ url_for('admin.create_visitor_category') }}">
       <div class="modal-content">
         <div class="modal-header">
-          <h5 class="modal-title">Nova Categoria</h5>
+          <h5 class="modal-title"><i class="bi bi-plus-circle me-1" style="color:var(--olive-700);"></i>Nova Categoria</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
-
         <div class="modal-body">
           {{ category_form_fields(color_presets) }}
         </div>
-
         <div class="modal-footer">
-          <button class="btn btn-secondary" data-bs-dismiss="modal" type="button">
-            Cancelar
-          </button>
-          <button class="btn btn-success" type="submit">
-            Criar
-          </button>
+          <button class="btn-vc-secondary" data-bs-dismiss="modal" type="button">Cancelar</button>
+          <button class="btn-vc-success" type="submit">Criar</button>
         </div>
       </div>
     </form>
@@ -180,28 +457,22 @@
 </div>
 
 
-<!-- Modais de edição -->
+<!-- ═══ Modais de edição ═══ -->
 {% for cat in visitor_categories_full %}
-<div class="modal fade" id="modalEditCat{{ cat.id }}" tabindex="-1">
-  <div class="modal-dialog">
+<div class="modal fade vc-modal" id="modalEditCat{{ cat.id }}" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
     <form method="post" action="{{ url_for('admin.edit_visitor_category', cat_id=cat.id) }}">
       <div class="modal-content">
         <div class="modal-header">
-          <h5 class="modal-title">Editar — {{ cat.label }}</h5>
+          <h5 class="modal-title"><i class="bi bi-pencil me-1" style="color:var(--olive-700);"></i>Editar — {{ cat.label }}</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
-
         <div class="modal-body">
           {{ category_form_fields(color_presets, cat) }}
         </div>
-
         <div class="modal-footer">
-          <button class="btn btn-secondary" data-bs-dismiss="modal" type="button">
-            Cancelar
-          </button>
-          <button class="btn btn-primary" type="submit">
-            Salvar
-          </button>
+          <button class="btn-vc-secondary" data-bs-dismiss="modal" type="button">Cancelar</button>
+          <button class="btn-vc-success" type="submit">Salvar</button>
         </div>
       </div>
     </form>
@@ -210,13 +481,10 @@
 {% endfor %}
 
 
-<!-- ═══════════════════════════════════════════════════════════════════ -->
-<!-- Modais de exclusão com migração                                    -->
-<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- ═══ Modais de exclusão com migração ═══ -->
 {% for cat in visitor_categories_full %}
 {% set cat_visitor_count = visitor_counts.get(cat.id, 0) %}
 
-{# ── Lista outras categorias para onde migrar ── #}
 {% set other_cats = [] %}
 {% for c in visitor_categories_full %}
   {% if c.id != cat.id %}
@@ -224,106 +492,70 @@
   {% endif %}
 {% endfor %}
 
-<div class="modal fade" id="modalDeleteCat{{ cat.id }}" tabindex="-1">
-  <div class="modal-dialog">
-    <form method="post"
-          action="{{ url_for('admin.delete_visitor_category', cat_id=cat.id) }}">
+<div class="modal fade vc-modal vc-modal-danger" id="modalDeleteCat{{ cat.id }}" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <form method="post" action="{{ url_for('admin.delete_visitor_category', cat_id=cat.id) }}">
       <div class="modal-content">
-        <div class="modal-header bg-danger text-white">
+        <div class="modal-header">
           <h5 class="modal-title">
-            <i class="bi bi-exclamation-triangle me-2"></i>
-            Deletar Categoria
+            <i class="bi bi-exclamation-triangle me-1"></i>Deletar Categoria
           </h5>
-          <button type="button"
-                  class="btn-close btn-close-white"
-                  data-bs-dismiss="modal"></button>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
 
         <div class="modal-body">
-
           {% if cat_visitor_count > 0 %}
-
-            <div class="alert alert-warning mb-3">
-              <i class="bi bi-people-fill me-2"></i>
-              A categoria <strong>{{ cat.label }}</strong> está vinculada a
+            <div class="vc-alert-warn">
+              <i class="bi bi-people-fill me-1"></i>
+              <strong>{{ cat.label }}</strong> está vinculada a
               <strong>{{ cat_visitor_count }}</strong> visitante(s).
             </div>
 
             {% if other_cats|length == 1 %}
-              {# ── Só uma alternativa: migração automática ── #}
               {% set default_cat = other_cats[0] %}
-              <p class="mb-0">
-                Como só existe <strong>{{ default_cat.label }}</strong>
-                como alternativa, os {{ cat_visitor_count }} visitante(s)
-                serão migrados automaticamente para
-                <span class="badge {{ default_cat.badge_class }}">
-                  <i class="bi {{ default_cat.icon }} me-1"></i>
-                  {{ default_cat.label }}
+              <div style="font-size:.66rem;">
+                Os {{ cat_visitor_count }} visitante(s) serão migrados para
+                <span class="vc-badge {{ default_cat.badge_class }}">
+                  <i class="bi {{ default_cat.icon }}"></i>{{ default_cat.label }}
                 </span>.
-              </p>
-              <input type="hidden"
-                     name="target_category_id"
-                     value="{{ default_cat.id }}">
+              </div>
+              <input type="hidden" name="target_category_id" value="{{ default_cat.id }}">
 
             {% elif other_cats|length > 1 %}
-              {# ── Várias alternativas: dropdown de seleção ── #}
-              <p class="mb-2">
-                Para prosseguir, selecione para qual categoria os
-                <strong>{{ cat_visitor_count }}</strong> visitante(s)
-                serão migrados:
-              </p>
-
-              <select name="target_category_id"
-                      class="form-select"
-                      required>
-                <option value="" disabled selected>
-                  Selecione uma categoria...
-                </option>
+              <div style="font-size:.66rem;margin-bottom:.3rem;">
+                Selecione para qual categoria os visitantes serão migrados:
+              </div>
+              <select name="target_category_id" class="vc-input" required>
+                <option value="" disabled selected>Selecione uma categoria...</option>
                 {% for target in other_cats %}
                 <option value="{{ target.id }}">
-                  {{ target.label }}
-                  {% set tcount = visitor_counts.get(target.id, 0) %}
-                  ({{ tcount }} visitante(s))
+                  {{ target.label }} ({{ visitor_counts.get(target.id, 0) }})
                 </option>
                 {% endfor %}
               </select>
 
             {% else %}
-              {# ── Nenhuma alternativa: bloqueio (não deve chegar aqui
-                   pois o backend também barra) ── #}
-              <div class="alert alert-danger mb-0">
-                Não há outra categoria disponível para migrar os visitantes.
-                Cadastre uma nova categoria antes de excluir esta.
+              <div class="vc-alert-danger">
+                Não há outra categoria disponível. Cadastre uma antes de excluir.
               </div>
             {% endif %}
 
           {% else %}
-
-            <p class="mb-0">
-              A categoria <strong>{{ cat.label }}</strong> não possui
-              visitantes vinculados. Deseja realmente deletá-la?
-            </p>
-
+            <div style="font-size:.68rem;">
+              <strong>{{ cat.label }}</strong> não possui visitantes vinculados. Deseja deletá-la?
+            </div>
           {% endif %}
-
         </div>
 
         <div class="modal-footer">
-          <button type="button"
-                  class="btn btn-secondary"
-                  data-bs-dismiss="modal">
-            Cancelar
-          </button>
-
+          <button type="button" class="btn-vc-secondary" data-bs-dismiss="modal">Cancelar</button>
           {% if cat_visitor_count > 0 and other_cats|length == 0 %}
-            {# ── Sem saída: botão desabilitado ── #}
-            <button type="submit" class="btn btn-danger" disabled>
+            <button type="submit" class="btn-vc-danger" disabled>
               <i class="bi bi-trash me-1"></i>Deletar
             </button>
           {% else %}
-            <button type="submit" class="btn btn-danger">
-              <i class="bi bi-trash me-1"></i>
-              Deletar e migrar
+            <button type="submit" class="btn-vc-danger">
+              <i class="bi bi-trash me-1"></i>Deletar e migrar
             </button>
           {% endif %}
         </div>
@@ -335,42 +567,33 @@
 
 
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
-
 <script>
 document.addEventListener('DOMContentLoaded', () => {
+  // Sincroniza cor selecionada com campos hidden
   document.querySelectorAll('input[name="color_combo"]').forEach(radio => {
     radio.addEventListener('change', e => {
       const form = e.target.closest('form');
       const [btn, badge] = e.target.value.split('|');
-
       const btnInput = form.querySelector('input[name="btn_class"]');
       const badgeInput = form.querySelector('input[name="badge_class"]');
-
-      if (btnInput) {
-        btnInput.value = btn;
-      }
-
-      if (badgeInput) {
-        badgeInput.value = badge;
-      }
+      if (btnInput) btnInput.value = btn;
+      if (badgeInput) badgeInput.value = badge;
     });
   });
 
+  // Drag & drop para reordenar
   const list = document.getElementById('categoriesSortable');
-
   if (list && window.Sortable) {
     Sortable.create(list, {
-      handle: '.bi-grip-vertical',
+      handle: '.vc-drag',
       animation: 150,
+      ghostClass: 'drag-ghost',
       onEnd: () => {
         const ids = [...list.querySelectorAll('[data-cat-id]')]
-          .map(li => parseInt(li.dataset.catId));
-
+          .map(el => parseInt(el.dataset.catId));
         fetch("{{ url_for('admin.reorder_visitor_categories') }}", {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ ids })
         });
       }

@@ -1,0 +1,493 @@
+{# templates/components/identity_card.html #}
+
+{% macro identity_card(visitor, edit_url=None, show_stats=False, extra_class='', temp_photo_id=None) %}
+
+<style>
+/* ═══════════════════════════════════════════════════════════
+   IDENTITY CARD — Novo Design
+   Baseado no modelo visual: header verde escuro, corpo verde
+   claro com watermark, foto em bloco próprio e rodapé com
+   categoria + empresa.
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Wrapper ── */
+.vic-wrapper {
+  display: inline-block;
+  max-width: 100%;
+}
+
+/* ─ Cartão principal ── */
+.vic-card {
+  width: 560px;
+  max-width: 100%;
+  border-radius: 18px;
+  overflow: hidden;
+  background: #cfe4c8;          /* verde claro do corpo */
+  border: 3px solid #2d5a1e;    /* borda verde escura */
+  box-shadow: 0 6px 20px rgba(0,0,0,.3);
+  position: relative;
+  font-family: 'Segoe UI', Arial, sans-serif;
+}
+
+/* ── Watermark "SISPORT" no fundo ── */
+.vic-watermark {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 7rem;
+  font-weight: 900;
+  color: rgba(61,145,64,.14);
+  letter-spacing: .4rem;
+  pointer-events: none;
+  z-index: 0;
+  transform: rotate(-8deg);
+}
+
+.vic-inner { position: relative; z-index: 1; }
+
+/* ═══════════════════════════════════════════════════════════
+   CABEÇALHO
+   Barra verde escura com título à esquerda e ID + editar à direita
+   ═══════════════════════════════════════════════════════════ */
+.vic-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #2d5a1e;
+  color: #fff;
+  padding: .7rem 1.1rem;
+}
+
+.vic-header-title {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+
+.vic-header-icon { font-size: 1.5rem; }
+
+.vic-header-actions {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  background: rgba(255,255,255,.12);
+  padding: .35rem .75rem;
+  border-radius: 8px;
+}
+
+.vic-header-id {
+  font-weight: 700;
+  font-size: .95rem;
+  letter-spacing: .03rem;
+}
+
+.vic-edit {
+  color: #fff;
+  font-size: 1.2rem;
+  text-decoration: none;
+  transition: transform .15s;
+}
+.vic-edit:hover { transform: scale(1.15); }
+
+/* ═══════════════════════════════════════════════════════════
+   CORPO
+   Foto à esquerda (bloco próprio) + dados à direita
+   ══════════════════════════════════════════════════════════ */
+.vic-body {
+  display: flex;
+  gap: 1.2rem;
+  padding: 1.1rem;
+  align-items: flex-start;
+}
+
+/* ── Coluna da foto (bloco próprio) ── */
+.vic-col-photo {
+  flex-shrink: 0;
+  width: 150px;
+}
+
+.vic-photo {
+  width: 150px;
+  height: 180px;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #e0e0e0;
+  border: 3px solid #fff;
+  box-shadow: 0 3px 10px rgba(0,0,0,.15);
+}
+
+.vic-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* ── Coluna dos dados ── */
+.vic-col-data {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: .45rem;
+  min-width: 0;
+  padding-top: .2rem;
+}
+
+/* ── Nome + CPF em destaque ── */
+.vic-name-block { margin-bottom: .3rem; }
+
+.vic-name {
+  font-size: 1.3rem;
+  font-weight: 900;
+  color: #111;
+  line-height: 1.15;
+  text-transform: uppercase;
+  letter-spacing: .02rem;
+}
+
+.vic-cpf {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #222;
+  margin-top: .15rem;
+  letter-spacing: .03rem;
+}
+
+/* ── Seções genéricas (Filiação / Contato) ── */
+.vic-section { margin-top: .15rem; }
+
+.vic-section-label {
+  font-size: .72rem;
+  font-weight: 700;
+  color: #3d9140;
+  text-transform: uppercase;
+  letter-spacing: .06rem;
+  margin-bottom: .15rem;
+}
+
+.vic-section-value {
+  font-size: .9rem;
+  font-weight: 700;
+  color: #111;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+/* ── Contatos com ícones ── */
+.vic-contacts { display: flex; flex-direction: column; gap: .2rem; }
+
+.vic-contact-item {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  font-size: .85rem;
+  color: #222;
+}
+
+.vic-contact-item i { font-size: 1rem; color: #2d5a1e; }
+
+/* ═══════════════════════════════════════════════════════════
+   RODAPÉ
+   Categoria + Empresa na mesma linha.
+   Quando não há empresa, categoria ocupa 100% (via .vic-footer-full).
+   ═══════════════════════════════════════════════════════════ */
+.vic-footer {
+  display: flex;
+  align-items: stretch;
+  gap: .8rem;
+  padding: .7rem 1.1rem .9rem;
+  margin: 0 1.1rem;
+  border-top: 2px solid rgba(45,90,30,.35);
+}
+
+/* Badge de categoria */
+.vic-category-badge {
+  background: #b0b0b0;
+  color: #222;
+  font-size: .78rem;
+  font-weight: 800;
+  padding: .45rem .9rem;
+  border-radius: 8px;
+  text-transform: uppercase;
+  letter-spacing: .06rem;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 140px;
+}
+
+/* Empresa alinhada à direita */
+.vic-company {
+  margin-left: auto;
+  font-size: .85rem;
+  font-weight: 800;
+  color: #111;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  letter-spacing: .03rem;
+}
+
+/* Quando NÃO há empresa → categoria ocupa 100% */
+.vic-footer-full {
+  justify-content: center;
+}
+.vic-footer-full .vic-category-badge {
+  flex: 1;
+  min-width: 0;
+}
+
+
+
+/* ═══════════════════════════════════════════════════════════
+   ESTATÍSTICAS (opcional)
+   ═══════════════════════════════════════════════════════════ */
+.vic-stats {
+  display: flex;
+  gap: .6rem;
+  margin-top: .7rem;
+  font-size: .6rem;
+}
+
+.vic-stat {
+  flex: 1;
+  text-align: center;
+  background: #fff;
+  border-radius: 8px;
+  padding: .4rem .3rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,.1);
+}
+
+.vic-stat-icon { font-size: 1rem; color: #3d9140; }
+.vic-stat-icon.gold  { color: #d4a017; }
+.vic-stat-icon.muted { color: #999; }
+.vic-stat-label { color: #666; margin-top: .1rem; }
+.vic-stat-value { font-weight: 700; color: #222; }
+.vic-stat-value.gold { color: #d4a017; }
+
+/* ═══════════════════════════════════════════════════════════
+   HOVER — Inclinação 3D ao passar o mouse
+   ═══════════════════════════════════════════════════════════ */
+
+/* Perspectiva no wrapper para dar profundidade 3D */
+.vic-wrapper {
+  perspective: 1000px;
+}
+
+/* Transição suave no card (já existe border-radius etc., só adiciona o transform) */
+.vic-card {
+  transition: transform .35s cubic-bezier(.25,.8,.25,1),
+              box-shadow .35s ease;
+  transform-style: preserve-3d;
+}
+
+/* Inclinação ao passar o mouse */
+.vic-wrapper:hover .vic-card {
+  transform: rotateY(1deg) rotateX(1deg) scale(0.99);
+  box-shadow: 8px 8px 18px rgba(0,0,0,.35);
+}
+
+/* (Opcional) Efeito extra: brilho sutil no hover */
+.vic-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 18px;
+  background: linear-gradient(
+    135deg,
+    rgba(255,255,255,.15) 0%,
+    transparent 50%,
+    rgba(255,255,255,.05) 100%
+  );
+  opacity: 0;
+  transition: opacity .35s ease;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.vic-wrapper:hover .vic-card::after {
+  opacity: 1;
+}
+
+/* ── Wrapper (atualizado com perspective) ── */
+.vic-wrapper {
+  display: inline-block;
+  max-width: 100%;
+  perspective: 1000px;
+}
+
+/* ── Cartão principal (atualizado com transition) ─ */
+.vic-card {
+  width: 560px;
+  max-width: 100%;
+  border-radius: 18px;
+  overflow: hidden;
+  background: #cfe4c8;
+  border: 3px solid #2d5a1e;
+  box-shadow: 0 6px 20px rgba(0,0,0,.3);
+  position: relative;
+  font-family: 'Segoe UI', Arial, sans-serif;
+  transition: transform .35s cubic-bezier(.25,.8,.25,1),
+              box-shadow .35s ease;
+  transform-style: preserve-3d;
+}
+
+
+
+</style>
+
+{# ── Variáveis de contexto ── #}
+{% set visitor_id = visitor.id|default('NOVO') %}
+{% set cat_color = visitor.category_color|default('#3d9140') %}
+{% set cat_name  = visitor.category|default('Visitante') %}
+{% set cpf_fmt   = visitor.cpf|default('') %}
+{% set company   = visitor.empresa|default('') %}
+{# Flag para decidir se o rodapé ocupa largura total (sem empresa) #}
+{% set has_company = (company|length > 0) if company else false %}
+
+<div class="vic-wrapper {{ extra_class }}">
+
+  <div class="vic-card" title="Carteira de visitante">
+    <div class="vic-watermark">SISPORT</div>
+    <div class="vic-inner">
+
+      {# ═══════════════════════════════════════════════════════
+         CABEÇALHO
+         Ícone + título à esquerda | ID + botão editar à direita
+         ═══════════════════════════════════════════════════════ #}
+      <div class="vic-header">
+        <div class="vic-header-title">
+          <i class="bi bi-person-vcard vic-header-icon"></i>
+          <span>SISPORT - Carteira de Identidade</span>
+        </div>
+        <div class="vic-header-actions">
+          {% set vid_str = visitor_id|string %}
+          <span class="vic-header-id">#{{ '%02d'|format(vid_str|int) if vid_str.isdigit() else visitor_id }}</span>
+
+          {% if edit_url %}
+          <a href="{{ edit_url }}" class="vic-edit" title="Editar visitante">
+            <i class="bi bi-pencil-square"></i>
+          </a>
+          {% endif %}
+        </div>
+      </div>
+
+      {# ═══════════════════════════════════════════════════════
+         CORPO
+         Foto em bloco próprio à esquerda + dados à direita
+         ═══════════════════════════════════════════════════════ #}
+      <div class="vic-body">
+
+        {# ── Bloco da foto (espaço dedicado) ── #}
+        <div class="vic-col-photo">
+          <div class="vic-photo">
+            {% if temp_photo_id %}
+              <img src="{{ photo_url('temp', temp_photo_id) }}" alt="Foto">
+            {% elif visitor.photo_data %}
+              <img src="{{ photo_url('visitor', visitor.id) }}" alt="Foto">
+            {% else %}
+              <img src="{{ url_for('static', filename='img/avatar-placeholder.jpg') }}" alt="Sem foto">
+            {% endif %}
+          </div>
+        </div>
+
+        {# ── Coluna dos dados ── #}
+        <div class="vic-col-data">
+
+          {# Nome + CPF em destaque #}
+          <div class="vic-name-block">
+            <div class="vic-name">{{ visitor.name }}</div>
+            {% if cpf_fmt %}
+            <div class="vic-cpf">{{ cpf_fmt }}</div>
+            {% endif %}
+          </div>
+
+          {# Filiação (nome da mãe e do pai) #}
+          <div class="vic-section">
+            <div class="vic-section-label">Filiação</div>
+            <div class="vic-section-value">{{ visitor.mom_name   or '—' }}</div>
+            <div class="vic-section-value">{{ visitor.father_name or '—' }}</div>
+          </div>
+
+          {# Contato (telefone e e-mail) #}
+          <div class="vic-section">
+            <div class="vic-section-label">Contato</div>
+            <div class="vic-contacts">
+              {% if visitor.phone %}
+              <div class="vic-contact-item">
+                <i class="bi bi-telephone"></i>
+                <span>{{ visitor.phone }}</span>
+              </div>
+              {% endif %}
+              {% if visitor.email %}
+              <div class="vic-contact-item">
+                <i class="bi bi-envelope"></i>
+                <span class="text-truncate">{{ visitor.email }}</span>
+              </div>
+              {% endif %}
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      {# ═══════════════════════════════════════════════════════
+         RODAPÉ
+         Categoria + Empresa na mesma linha.
+         Se não houver empresa, categoria ocupa 100% do espaço.
+         ═══════════════════════════════════════════════════════ #}
+      <div class="vic-footer {{ 'vic-footer-full' if not has_company }}">
+        <div class="fs-6 p-1 w-75 rounded-2 text-center {{ visitor.category.badge_class }}"><i class="{{ visitor.category.icon }}"> </i>{{ visitor.category.label }}</div>
+        {% if has_company %}
+        <div class="vic-company">{{ company }}</div>
+        {% endif %}
+      </div>
+
+    </div>
+  </div>
+
+  {# ══════════════════════════════════════════════════════════
+     ESTATÍSTICAS (opcional)
+     Mostra total de visitas, última visita e status (dentro/fora)
+     ═════════════════════════════════════════════════════════ #}
+  {% if show_stats %}
+  <div class="vic-stats">
+    {% set total_visitas   = visitor.visits|default([])|length %}
+    {% set visitas_abertas = visitor.visits|default([])|selectattr('check_out', 'none')|list|length %}
+
+    <div class="vic-stat">
+      <div class="vic-stat-icon"><i class="bi bi-door-open"></i></div>
+      <div class="vic-stat-label">Visitas</div>
+      <div class="vic-stat-value">{{ total_visitas }}</div>
+    </div>
+
+    <div class="vic-stat">
+      <div class="vic-stat-icon"><i class="bi bi-calendar-check"></i></div>
+      <div class="vic-stat-label">Última</div>
+      <div class="vic-stat-value" style="font-size:.5rem;">
+        {% if total_visitas > 0 %}
+          {{ visitor.visits[-1].check_in.strftime('%d/%m/%y') }}
+        {% else %}—{% endif %}
+      </div>
+    </div>
+
+    <div class="vic-stat">
+      <div class="vic-stat-icon {% if visitas_abertas > 0 %}gold{% else %}muted{% endif %}">
+        <i class="bi {% if visitas_abertas > 0 %}bi-person-walking{% else %}bi-person-check{% endif %}"></i>
+      </div>
+      <div class="vic-stat-label">Status</div>
+      <div class="vic-stat-value {% if visitas_abertas > 0 %}gold{% endif %}" style="font-size:.5rem;">
+        {% if visitas_abertas > 0 %}Dentro{% else %}Fora{% endif %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+
+{% endmacro %}

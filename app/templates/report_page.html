@@ -1,315 +1,168 @@
 {% extends "base.html" %}
 {% import "components/visitor_category.html" as visitor_category %}
 
+{% block toolbar_icon %}<i class="bi bi-clipboard-data"></i>{% endblock %}
+{% block toolbar_title %}{{ title }}{% endblock %}
+{% block toolbar_badge %}
+<span class="toolbar-badge ms-2">{{ total }} registro{{ 's' if total != 1 }}</span>
+{% if open_count > 0 %}<span class="toolbar-badge ms-1" style="background:rgba(74,93,35,.15);">{{ open_count }} aberto{{ 's' if open_count != 1 }}</span>{% endif %}
+{% endblock %}
+{% block toolbar_actions %}
+<button type="button" class="btn btn-olive btn-sm no-print" id="btnPrint">
+  <i class="bi bi-printer me-1"></i>Imprimir
+</button>
+<a class="btn btn-outline-secondary btn-sm" href="{{ url_for('visitor.open_visits') }}">
+  <i class="bi bi-door-open me-1"></i>Em Aberto
+</a>
+<a class="btn btn-outline-secondary btn-sm" href="{{ url_for('visitor.identify') }}">
+  <i class="bi bi-arrow-left me-1"></i>Início
+</a>
+{% endblock %}
 
 {% block styles %}
 <style>
-  /* ── Painel de filtros (card colapsável) ─────────────────────────── */
   .filter-panel {
-    border: 1px solid rgba(0,0,0,.08);
-    border-radius: 12px;
-    background: #fff;
-    box-shadow: 0 2px 8px rgba(0,0,0,.04);
-    margin-bottom: 20px;
+    border: 1px solid rgba(0,0,0,.06);
+    border-radius: 8px;
+    background: var(--bg-card);
+    box-shadow: 0 1px 3px rgba(0,0,0,.04);
+    margin-bottom: 12px;
     overflow: hidden;
   }
-
   .filter-panel .panel-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 14px 18px;
+    padding: 8px 12px;
     cursor: pointer;
     user-select: none;
     transition: background .15s;
-    gap: 12px;
+    gap: 10px;
+    font-size: .78rem;
   }
-  .filter-panel .panel-header:hover {
-    background: #f8f9fa;
-  }
-
+  .filter-panel .panel-header:hover { background: #f8f9fa; }
   .filter-panel .panel-header .toggle-icon {
     transition: transform .25s;
-    font-size: 1.1rem;
-    color: #6c757d;
+    font-size: .9rem;
+    color: var(--text-muted);
   }
-  .filter-panel.collapsed .panel-header .toggle-icon {
-    transform: rotate(-90deg);
-  }
-
+  .filter-panel.collapsed .panel-header .toggle-icon { transform: rotate(-90deg); }
   .filter-panel .panel-body {
-    padding: 0 18px 16px 18px;
-    border-top: 1px solid rgba(0,0,0,.06);
-    animation: slideDown .2s ease;
+    padding: 0 12px 12px 12px;
+    border-top: 1px solid rgba(0,0,0,.05);
   }
-  .filter-panel.collapsed .panel-body {
-    display: none;
-  }
-
-  mark.search-highlight,
-  .search-highlight {
-  background-color: #FFEB3B;
-  padding: 1px 2px;
-  border-radius: 2px;
-  color: #000;
-}
-
-
-  @keyframes slideDown {
-    from { opacity: 0; transform: translateY(-6px); }
-    to   { opacity: 1; transform: translateY(0); }
-  }
-
-  /* ── Atalhos de data ─────────────────────────────────────────────── */
-  .date-shortcuts {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-  }
-  .date-shortcuts .btn {
-    font-size: .78rem;
-    padding: 3px 10px;
-    border-radius: 20px;
-  }
-
-  /* ── Botão editar (sutil) ────────────────────────────────────────── */
+  .filter-panel.collapsed .panel-body { display: none; }
+  .date-shortcuts { display: flex; flex-wrap: wrap; gap: 3px; }
+  .date-shortcuts .btn { font-size: .65rem; padding: 2px 8px; border-radius: 14px; }
   .btn-edit-subtle {
     color: #adb5bd;
     background: transparent;
     border: none;
     padding: 2px 6px;
-    font-size: .85rem;
+    font-size: .75rem;
     transition: color .15s;
     text-decoration: none;
   }
-  .btn-edit-subtle:hover {
-    color: #0d6efd;
-  }
-
-  /* ── Scrollbar customizada ───────────────────────────────────────── */
-  .table-responsive::-webkit-scrollbar { width: 8px; }
-  .table-responsive::-webkit-scrollbar-track { background: #f0f0f0; border-radius: 4px; }
-  .table-responsive::-webkit-scrollbar-thumb { background: #b0b0b0; border-radius: 4px; }
-  .table-responsive::-webkit-scrollbar-thumb:hover { background: #888; }
-  .table-responsive { scrollbar-width: thin; scrollbar-color: #b0b0b0 #f0f0f0; }
+  .btn-edit-subtle:hover { color: var(--olive-700); }
+  .search-highlight { background-color: #FFEB3B; padding: 1px 2px; border-radius: 2px; color: #000; }
 </style>
 {% endblock %}
 
 {% block content %}
+<div class="px-3 px-md-4 pt-2">
 
-<div class="container-fluid px-3 px-md-4 pt-3">
-
-  {# ═══════════════════════════════════════════════════════════════ #}
-  {# LINHA SUPERIOR — Título + Badges + Botões                    #}
-  {# ═══════════════════════════════════════════════════════════════ #}
-  <div class="d-flex flex-column flex-md-row justify-content-between
-              align-items-md-center gap-3 mb-3">
-    <div>
-      <h1 class="h4 mb-1">
-        <i class="bi bi-clipboard-data me-2"></i>{{ title }}
-      </h1>
-      <div class="d-flex gap-2 flex-wrap">
-        <span class="badge text-bg-primary">
-          {{ total }} registro{{ 's' if total != 1 }}
-        </span>
-        <span class="badge text-bg-success">
-          {{ open_count }} em aberto
-        </span>
-        <span class="badge text-bg-secondary">
-          {{ closed_count }} finalizado{{ 's' if closed_count != 1 }}
-        </span>
-      </div>
-    </div>
-
-    <div class="d-flex gap-2 flex-wrap">
-      <button type="button" class="btn btn-primary btn-sm" id="btnPrint">
-        <i class="bi bi-printer me-1"></i>Imprimir
-      </button>
-      <a class="btn btn-outline-success btn-sm"
-         href="{{ url_for('visitor.open_visits') }}">
-        <i class="bi bi-door-open me-1"></i>Em Aberto
-      </a>
-      <a class="btn btn-outline-secondary btn-sm"
-         href="{{ url_for('visitor.identify') }}">
-        <i class="bi bi-arrow-left me-1"></i>Início
-      </a>
-    </div>
-  </div>
-
-  {# ═══════════════════════════════════════════════════════════════ #}
-  {# PAINEL DE FILTROS — COLAPSÁVEL                                #}
-  {# ═══════════════════════════════════════════════════════════════ #}
+  {# ── Filtros ──────────────────────────────────────────────────── #}
   <div class="filter-panel" id="filterPanel">
-    <div class="panel-header" id="filterPanelHeader"
-         title="Clique para recolher/expandir">
+    <div class="panel-header" id="filterPanelHeader" title="Clique para recolher/expandir">
       <div class="d-flex align-items-center gap-2">
-        <i class="bi bi-funnel-fill text-primary"></i>
+        <i class="bi bi-funnel-fill" style="color:var(--olive-700);"></i>
         <span class="fw-semibold small">
           Filtros
-          {% set has_active = (filters.search or
-                               filters.status != 'all' or
-                               filters.category_id != '') %}
+          {% set has_active = (filters.search or filters.status != 'all' or filters.category_id != '') %}
           {% if has_active %}
-            <span class="badge rounded-pill text-bg-warning ms-1"
-                  style="font-size:.65rem">ativos</span>
+            <span class="badge rounded-pill ms-1" style="background:var(--warning);font-size:.6rem;color:#fff;">ativos</span>
           {% endif %}
         </span>
       </div>
       <i class="bi bi-chevron-down toggle-icon"></i>
     </div>
-
     <div class="panel-body">
-      <form method="get" action="{{ url_for('visitor.report_page') }}"
-            id="filter-form">
-
-        {# ── Linha 1: Período + Atalhos ──────────────────────── #}
+      <form method="get" action="{{ url_for('visitor.report_page') }}" id="filter-form">
         <div class="row g-2 align-items-end mb-2">
           <div class="col-6 col-md-auto">
-            <label class="form-label small mb-0 text-muted">De</label>
-            <input type="date" name="date_from"
-                   class="form-control form-control-sm"
-                   value="{{ filters.date_from }}">
+            <label class="form-label small mb-0">De</label>
+            <input type="date" name="date_from" class="form-control form-control-sm" value="{{ filters.date_from }}">
           </div>
           <div class="col-6 col-md-auto">
-            <label class="form-label small mb-0 text-muted">Até</label>
-            <input type="date" name="date_to"
-                   class="form-control form-control-sm"
-                   value="{{ filters.date_to }}">
+            <label class="form-label small mb-0">Até</label>
+            <input type="date" name="date_to" class="form-control form-control-sm" value="{{ filters.date_to }}">
           </div>
-
-          {# Atalhos de período #}
           <div class="col-12 col-md">
-            <label class="form-label small mb-0 text-muted">
-              Atalhos
-            </label>
+            <label class="form-label small mb-0">Atalhos</label>
             <div class="date-shortcuts">
-              <button type="button"
-                      class="btn btn-outline-secondary btn-sm date-shortcut"
-                      data-range="today">Hoje</button>
-              <button type="button"
-                      class="btn btn-outline-secondary btn-sm date-shortcut"
-                      data-range="yesterday">Ontem</button>
-              <button type="button"
-                      class="btn btn-outline-secondary btn-sm date-shortcut"
-                      data-range="week">7 dias</button>
-              <button type="button"
-                      class="btn btn-outline-secondary btn-sm date-shortcut"
-                      data-range="month">Este mês</button>
-              <button type="button"
-                      class="btn btn-outline-secondary btn-sm date-shortcut"
-                      data-range="all"
-                      title="Do primeiro registro até hoje">
-                <i class="bi bi-infinity me-1"></i>Todo o período
+              <button type="button" class="btn btn-outline-secondary btn-sm date-shortcut" data-range="today">Hoje</button>
+              <button type="button" class="btn btn-outline-secondary btn-sm date-shortcut" data-range="yesterday">Ontem</button>
+              <button type="button" class="btn btn-outline-secondary btn-sm date-shortcut" data-range="week">7 dias</button>
+              <button type="button" class="btn btn-outline-secondary btn-sm date-shortcut" data-range="month">Este mês</button>
+              <button type="button" class="btn btn-outline-secondary btn-sm date-shortcut" data-range="all">
+                <i class="bi bi-infinity me-1"></i>Todo período
               </button>
-
-              {# ── Separador visual ── #}
               <span class="align-self-center text-muted px-1">|</span>
-
               {% for y in available_years %}
-              <button type="button"
-                      class="btn btn-outline-secondary btn-sm date-shortcut"
-                      data-range="year"
-                      data-year="{{ y }}">
-                {{ y }}
-              </button>
+              <button type="button" class="btn btn-outline-secondary btn-sm date-shortcut" data-range="year" data-year="{{ y }}">{{ y }}</button>
               {% endfor %}
             </div>
           </div>
         </div>
-
-        {# ── Linha 2: Busca + Status + Categoria + Botões ───── #}
         <div class="row g-2 align-items-end mt-1">
           <div class="col-12 col-md">
-            <label class="form-label small mb-0 text-muted">Busca</label>
-            <input type="text" name="search"
-                   class="form-control form-control-sm"
-                   placeholder="Nome, CPF, telefone ou destino..."
-                   value="{{ filters.search }}" autocomplete="off">
+            <label class="form-label small mb-0">Busca</label>
+            <input type="text" name="search" class="form-control form-control-sm"
+                   placeholder="Nome, CPF, telefone ou destino..." value="{{ filters.search }}" autocomplete="off">
           </div>
-
           <div class="col-6 col-md-auto">
-            <label class="form-label small mb-0 text-muted">Status</label>
+            <label class="form-label small mb-0">Status</label>
             <select name="status" class="form-select form-select-sm">
-              <option value="all"
-                {{ 'selected' if filters.status == 'all' }}>Todos</option>
-              <option value="open"
-                {{ 'selected' if filters.status == 'open' }}>Em aberto</option>
-              <option value="closed"
-                {{ 'selected' if filters.status == 'closed' }}>Finalizados</option>
+              <option value="all" {{ 'selected' if filters.status == 'all' }}>Todos</option>
+              <option value="open" {{ 'selected' if filters.status == 'open' }}>Em aberto</option>
+              <option value="closed" {{ 'selected' if filters.status == 'closed' }}>Finalizados</option>
             </select>
           </div>
-
           <div class="col-6 col-md-auto">
-            <label class="form-label small mb-0 text-muted">Categoria</label>
-            {{ visitor_category.filter_select(visitor_categories,
-                                              filters.category_id,
-                                              'category_id') }}
+            <label class="form-label small mb-0">Categoria</label>
+            {{ visitor_category.filter_select(visitor_categories, filters.category_id, 'category_id') }}
           </div>
-
           <div class="col-12 col-md-auto d-flex gap-1">
-            <button type="submit" class="btn btn-primary btn-sm">
-              <i class="bi bi-funnel me-1"></i>Filtrar
-            </button>
-            <a href="{{ url_for('visitor.report_page') }}"
-               class="btn btn-outline-secondary btn-sm">
-              <i class="bi bi-x-circle me-1"></i>Limpar
-            </a>
+            <button type="submit" class="btn btn-olive btn-sm"><i class="bi bi-funnel me-1"></i>Filtrar</button>
+            <a href="{{ url_for('visitor.report_page') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-x-circle me-1"></i>Limpar</a>
           </div>
         </div>
       </form>
-
-      {# ── Filtros ativos (pills) ───────────────────────────── #}
-      {% set has_active = (filters.search or
-                           filters.status != 'all' or
-                           filters.category_id != '') %}
       {% if has_active %}
-      <div class="d-flex flex-wrap gap-1 mt-3 pt-2
-                  border-top border-light">
+      <div class="d-flex flex-wrap gap-1 mt-3 pt-2 border-top border-light">
         <small class="text-muted me-1 align-self-center">Ativos:</small>
-        {% if filters.search %}
-          <span class="badge text-bg-info">
-            <i class="bi bi-search me-1"></i>"{{ filters.search }}"
-          </span>
-        {% endif %}
-        {% if filters.status == 'open' %}
-          <span class="badge text-bg-success">Em aberto</span>
-        {% elif filters.status == 'closed' %}
-          <span class="badge text-bg-secondary">Finalizados</span>
-        {% endif %}
-        {% if filters.category_id != '' %}
-          {% set selected_category = (
-            visitor_categories
-            | selectattr('id', 'equalto', filters.category_id|int)
-            | list | first
-          ) %}
-          {% if selected_category %}
-            {{ visitor_category.badge(selected_category) }}
-          {% endif %}
-        {% endif %}
+        {% if filters.search %}<span class="badge bg-info text-dark"><i class="bi bi-search me-1"></i>"{{ filters.search }}"</span>{% endif %}
+        {% if filters.status == 'open' %}<span class="badge-sisport">Em aberto</span>{% elif filters.status == 'closed' %}<span class="badge bg-secondary">Finalizados</span>{% endif %}
       </div>
       {% endif %}
+    </div>
+  </div>
 
-    </div><!-- /.panel-body -->
-  </div><!-- /.filter-panel -->
-
-  {# ═══════════════════════════════════════════════════════════════ #}
-  {# TABELA                                                        #}
-  {# ═══════════════════════════════════════════════════════════════ #}
+  {# ── Tabela ───────────────────────────────────────────────────── #}
   {% if visits|length > 0 %}
-  <div class="card shadow-sm border-0">
-    <div class="table-responsive">
-      <table class="table table-hover align-middle mb-0" id="visits-table">
-        <thead class="table-light"
-               style="position: sticky; top: 0; z-index: 2;">
+  <div class="sheet">
+    <div class="table-responsive" style="max-height: calc(100vh - 340px); overflow-y: auto;">
+      <table class="table table-hover align-middle mb-0" id="visits-table" style="font-size:.75rem;">
+        <thead class="table-light" style="position: sticky; top: 0; z-index: 2;">
           <tr>
-            <th style="width:40px;"></th>
-            <th style="width:72px;">Foto</th>
+            <th style="width:36px;"></th>
+            <th style="width:60px;">Foto</th>
             <th>Visitante</th>
             <th>Destino</th>
             <th>Entrada</th>
             <th>Saída</th>
-            <th style="width:120px;">Tempo</th>
-            <th style="width:40px;"></th>
+            <th style="width:100px;">Tempo</th>
+            <th style="width:36px;"></th>
           </tr>
         </thead>
         <tbody>
@@ -317,77 +170,40 @@
           <tr>
             <td class="text-center">
               {% if not v.check_out %}
-                <span class="badge text-bg-success"
-                      title="Dentro da instalação">●</span>
+                <span class="badge rounded-pill" style="background:var(--olive-700);width:8px;height:8px;padding:0;display:inline-block;" title="Dentro"></span>
               {% else %}
-                <span class="badge text-bg-secondary"
-                      title="Saída registrada">●</span>
+                <span class="badge rounded-pill" style="background:#ccc;width:8px;height:8px;padding:0;display:inline-block;" title="Saída"></span>
               {% endif %}
             </td>
-
             <td>
-              <div style="width:64px;height:64px;border-radius:10px;
-                          overflow:hidden;">
+              <div class="photo-box" style="width:50px;height:50px;border-radius:6px;">
                 {% if v.visitor.photo_data %}
-                  <img src="{{ photo_url('visitor', v.visitor.id) }}"
-                       alt="Foto"
-                       style="width:64px; height:64px; object-fit:cover;">
+                  <img src="{{ photo_url('visitor', v.visitor.id) }}" alt="Foto" style="width:50px;height:50px;object-fit:cover;">
                 {% else %}
-                  <img src="{{ url_for('static',
-                              filename='img/avatar-placeholder.jpg') }}"
-                       alt="Sem foto" class="opacity-50"
-                       style="width:64px; height:64px; object-fit:cover;">
+                  <img src="{{ url_for('static', filename='img/avatar-placeholder.jpg') }}" alt="Sem foto" class="opacity-50" style="width:50px;height:50px;object-fit:cover;">
                 {% endif %}
               </div>
             </td>
-
             <td>
-              <div class="fw-semibold">{{ v.visitor.name }}</div>
-              <div class="text-muted small">
-                <i class="bi bi-person-vcard"></i> {{ v.visitor.cpf }}
-              </div>
-              <div class="text-muted small">
-                <i class="bi bi-telephone"></i> {{ v.visitor.phone }}
-              </div>
-              <div class="small mt-1">
-                {{ visitor_category.badge(v.visitor.category) }}
-              </div>
+              <div class="fw-semibold small">{{ v.visitor.name }}</div>
+              <div class="muted" style="font-size:.63rem;"><i class="bi bi-person-vcard"></i> {{ v.visitor.cpf }}</div>
+              <div class="muted" style="font-size:.63rem;"><i class="bi bi-telephone"></i> {{ v.visitor.phone }}</div>
+              <div class="mt-1">{{ visitor_category.badge(v.visitor.category) }}</div>
             </td>
-
-            <td>{{ v.destination }}</td>
-
+            <td class="small">{{ v.destination }}</td>
+            <td class="small">{{ v.check_in.strftime("%d/%m/%Y %H:%M:%S") }}</td>
             <td class="small">
-              {{ v.check_in.strftime("%d/%m/%Y %H:%M:%S") }}
+              {% if v.check_out %}{{ v.check_out.strftime("%d/%m/%Y %H:%M:%S") }}{% else %}<span class="text-muted">—</span>{% endif %}
             </td>
-
-            <td class="small">
-              {% if v.check_out %}
-                {{ v.check_out.strftime("%d/%m/%Y %H:%M:%S") }}
-              {% else %}
-                <span class="text-muted">—</span>
-              {% endif %}
-            </td>
-
             <td>
-              <span class="font-monospace
-                    {% if not v.check_out %}
-                      text-success fw-semibold
-                    {% endif %}"
+              <span class="font-monospace {% if not v.check_out %}text-success fw-semibold{% endif %}"
+                    style="font-size:.68rem;"
                     data-timer="1"
                     data-checkin="{{ v.check_in.isoformat() }}"
-                    {% if v.check_out %}
-                      data-checkout="{{ v.check_out.isoformat() }}"
-                    {% endif %}>
-                --
-              </span>
+                    {% if v.check_out %}data-checkout="{{ v.check_out.isoformat() }}"{% endif %}>--</span>
             </td>
-
-            {# ── Botão sutil de editar ── #}
             <td class="text-center">
-              <a href="{{ url_for('visitor.visitor_edit',
-                         visitor_id=v.visitor.id) }}"
-                 class="btn-edit-subtle"
-                 title="Editar visitante">
+              <a href="{{ url_for('visitor.visitor_edit', visitor_id=v.visitor.id) }}" class="btn-edit-subtle" title="Editar">
                 <i class="bi bi-pencil-square"></i>
               </a>
             </td>
@@ -397,200 +213,108 @@
       </table>
     </div>
   </div>
-
   {% else %}
-  <div class="card shadow-sm border-0">
+  <div class="sheet">
     <div class="text-center text-muted py-5">
       <i class="bi bi-inbox fs-1 d-block mb-2 opacity-50"></i>
-      Nenhuma visita encontrada para os filtros selecionados.
+      Nenhuma visita encontrada.
     </div>
   </div>
   {% endif %}
 
-</div><!-- /.container-fluid -->
-
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-// ── Collapse do painel de filtros ────────────────────────────────
 (function(){
-  const panel = document.getElementById('filterPanel');
-  const header = document.getElementById('filterPanelHeader');
-
-  // Salva estado no localStorage
-  const key = 'sisport_filter_collapsed';
-  if (localStorage.getItem(key) === 'true') {
-    panel.classList.add('collapsed');
-  }
-
-  header.addEventListener('click', () => {
+  const panel=document.getElementById('filterPanel');
+  const header=document.getElementById('filterPanelHeader');
+  const key='sisport_filter_collapsed';
+  if(localStorage.getItem(key)==='true')panel.classList.add('collapsed');
+  header.addEventListener('click',()=>{
     panel.classList.toggle('collapsed');
-    localStorage.setItem(key, panel.classList.contains('collapsed'));
+    localStorage.setItem(key,panel.classList.contains('collapsed'));
   });
 })();
 
-// ── Imprimir — monta a URL com os filtros ATUAIS do form ────────
-document.getElementById('btnPrint').addEventListener('click', function(){
-  const form = document.getElementById('filter-form');
-  const params = new URLSearchParams(new FormData(form));
-  const url = "{{ url_for('visitor.report_print') }}" + "?" + params.toString();
-  imprimirRelatorio(url);
+document.getElementById('btnPrint').addEventListener('click',function(){
+  const form=document.getElementById('filter-form');
+  const params=new URLSearchParams(new FormData(form));
+  const url="{{ url_for('visitor.report_print') }}?"+params.toString();
+  let iframe=document.getElementById('printFrame');
+  if(iframe)iframe.remove();
+  iframe=document.createElement('iframe');
+  iframe.id='printFrame';
+  iframe.style.cssText='position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0;pointer-events:none;';
+  iframe.onload=function(){setTimeout(function(){iframe.contentWindow.focus();iframe.contentWindow.print();},500);};
+  iframe.src=url;
+  document.body.appendChild(iframe);
 });
 
-function imprimirRelatorio(url){
-  let iframe = document.getElementById('printFrame');
-  if (iframe) { iframe.remove(); }
-
-  iframe = document.createElement('iframe');
-  iframe.id = 'printFrame';
-  iframe.style.position = 'fixed';
-  iframe.style.right = '0';
-  iframe.style.bottom = '0';
-  iframe.style.width = '1px';
-  iframe.style.height = '1px';
-  iframe.style.border = '0';
-  iframe.style.opacity = '0';
-  iframe.style.pointerEvents = 'none';
-
-  iframe.onload = function(){
-    setTimeout(function(){
-      iframe.contentWindow.focus();
-      iframe.contentWindow.print();
-    }, 500);
-  };
-  iframe.src = url;
-  document.body.appendChild(iframe);
-}
-
-// ── Timer ──────────────────────────────────────────────────────────
-function pad2(n){ return String(n).padStart(2,"0"); }
+function pad2(n){return String(n).padStart(2,"0");}
 function fmtDuration(ms){
-  ms = Math.max(0, ms);
-  const t = Math.floor(ms / 1000),
-        h = Math.floor(t / 3600),
-        m = Math.floor((t % 3600) / 60),
-        s = t % 60;
+  ms=Math.max(0,ms);
+  const t=Math.floor(ms/1000),h=Math.floor(t/3600),m=Math.floor((t%3600)/60),s=t%60;
   return `${pad2(h)}:${pad2(m)}:${pad2(s)}`;
 }
 function tickTimers(){
-  const now = Date.now();
-  document.querySelectorAll('[data-timer="1"]').forEach(el => {
-    const cin = new Date(el.dataset.checkin).getTime();
-    const cout = el.dataset.checkout
-      ? new Date(el.dataset.checkout).getTime()
-      : null;
-    el.textContent = fmtDuration((cout ?? now) - cin);
+  const now=Date.now();
+  document.querySelectorAll('[data-timer="1"]').forEach(el=>{
+    const cin=new Date(el.dataset.checkin).getTime();
+    const cout=el.dataset.checkout?new Date(el.dataset.checkout).getTime():null;
+    el.textContent=fmtDuration((cout??now)-cin);
   });
 }
-tickTimers();
-setInterval(tickTimers, 1000);
+tickTimers();setInterval(tickTimers,1000);
 
-// ── Atalhos de data ────────────────────────────────────────────────
 (function(){
-  const form     = document.getElementById("filter-form");
-  const dateFrom = form.querySelector('[name="date_from"]');
-  const dateTo   = form.querySelector('[name="date_to"]');
-
-  function toISO(d){ return d.toISOString().slice(0,10); }
-
-  function highlightButton(btn){
-    document.querySelectorAll(".date-shortcut").forEach(b => {
-      b.classList.remove("btn-primary","text-white");
-      b.classList.add("btn-outline-secondary");
-    });
-    if (btn) {
-      btn.classList.add("btn-primary","text-white");
-      btn.classList.remove("btn-outline-secondary");
-    }
-  }
-
-  document.querySelectorAll(".date-shortcut").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const range = btn.dataset.range;
-      const today = new Date();
-      let from, to;
-
+  const form=document.getElementById("filter-form");
+  const dateFrom=form.querySelector('[name="date_from"]');
+  const dateTo=form.querySelector('[name="date_to"]');
+  function toISO(d){return d.toISOString().slice(0,10);}
+  document.querySelectorAll(".date-shortcut").forEach(btn=>{
+    btn.addEventListener("click",()=>{
+      const range=btn.dataset.range;
+      const today=new Date();
+      let from,to;
       switch(range){
-        case "today":
-          from = to = today;
-          break;
-        case "yesterday":
-          const y = new Date(today);
-          y.setDate(y.getDate() - 1);
-          from = to = y;
-          break;
-        case "week":
-          const w = new Date(today);
-          w.setDate(w.getDate() - 6);
-          from = w; to = today;
-          break;
-        case "month":
-          const m = new Date(today.getFullYear(), today.getMonth(), 1);
-          from = m; to = today;
-          break;
-        case "all":
-          // Usa a data do primeiro registro
-          from = new Date("{{ first_visit_date }}");
-          to = today;
-          break;
-        case "year":
-          const year = parseInt(btn.dataset.year);
-          from = new Date(year, 0, 1);
-          // Se for o ano atual, vai até hoje; senão até 31/12
-          if (year === today.getFullYear()) {
-            to = today;
-          } else {
-            to = new Date(year, 11, 31);
-          }
-          break;
+        case"today":from=to=today;break;
+        case"yesterday":const y=new Date(today);y.setDate(y.getDate()-1);from=to=y;break;
+        case"week":const w=new Date(today);w.setDate(w.getDate()-6);from=w;to=today;break;
+        case"month":from=new Date(today.getFullYear(),today.getMonth(),1);to=today;break;
+        case"all":from=new Date("{{ first_visit_date }}");to=today;break;
+        case"year":const year=parseInt(btn.dataset.year);from=new Date(year,0,1);to=year===today.getFullYear()?today:new Date(year,11,31);break;
       }
-
-      dateFrom.value = toISO(from);
-      dateTo.value   = toISO(to);
-      highlightButton(btn);
+      dateFrom.value=toISO(from);dateTo.value=toISO(to);
     });
   });
 })();
-</script>
 
-<script>
-  // Highlight do termo pesquisado
 (function(){
-  const searchInput = document.querySelector('input[name="search"]');
-  if (!searchInput) return;
-
-  const term = searchInput.value.trim();
-  if (!term || term.length < 2) return;
-
-  // Escapa caracteres especiais para regex
-  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const regex = new RegExp(`(${escaped})`, 'gi');
-
-  // Aplica highlight em todas as células da tabela
-  document.querySelectorAll('table tbody td').forEach(td => {
-    // Pula células que já contêm HTML de highlight
-    if (td.querySelector('.search-highlight')) return;
-
-    // Processa apenas nós de texto, preservando HTML interno
-    function highlightTextNodes(node) {
-      if (node.nodeType === 3) { // Nó de texto
-        const text = node.textContent;
-        if (regex.test(text)) {
-          const span = document.createElement('span');
-          span.innerHTML = text.replace(regex, '<mark class="search-highlight">$1</mark>');
+  const searchInput=document.querySelector('input[name="search"]');
+  if(!searchInput)return;
+  const term=searchInput.value.trim();
+  if(!term||term.length<2)return;
+  const escaped=term.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  const regex=new RegExp(`(${escaped})`,'gi');
+  document.querySelectorAll('table tbody td').forEach(td=>{
+    if(td.querySelector('.search-highlight'))return;
+    function highlightTextNodes(node){
+      if(node.nodeType===3){
+        const text=node.textContent;
+        if(regex.test(text)){
+          const span=document.createElement('span');
+          span.innerHTML=text.replace(regex,'<mark class="search-highlight">$1</mark>');
           node.replaceWith(...span.childNodes);
         }
-      } else if (node.nodeType === 1 && node.childNodes) {
-        // Não processa dentro de elementos já destacados
-        if (node.classList && node.classList.contains('search-highlight')) return;
+      }else if(node.nodeType===1&&node.childNodes){
+        if(node.classList&&node.classList.contains('search-highlight'))return;
         Array.from(node.childNodes).forEach(highlightTextNodes);
       }
     }
-
     highlightTextNodes(td);
   });
 })();
-
 </script>
 {% endblock %}

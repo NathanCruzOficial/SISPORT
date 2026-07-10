@@ -1,48 +1,142 @@
-<div class="text-muted small mb-3">
-  Exporte suas configurações para usar em outro computador ou importe um arquivo existente.
-  <strong>A senha de administrador não é incluída</strong> na exportação (por segurança).
-</div>
+<style>
+  .db-sec { font-size: .7rem; color: var(--text-main); }
+  .db-exp-imp-row {
+    display: grid; grid-template-columns: 1fr 1fr; gap: .6rem;
+  }
+  @media (max-width: 576px) { .db-exp-imp-row { grid-template-columns: 1fr; } }
 
-<div class="row g-3">
-  {# ── Exportar ─────────────────────────────────────────────────── #}
-  <div class="col-12 col-md-6">
-    <div class="card bg-light border-0 h-100">
-      <div class="card-body text-center">
-        <i class="bi bi-box-arrow-up fs-2 text-success d-block mb-2"></i>
-        <h6 class="fw-semibold">Exportar Configurações</h6>
-        <p class="text-muted small">
-          Baixa um arquivo <code>.json</code> com todas as configurações atuais
-          (exceto senha).
-        </p>
-        <a href="{{ url_for('admin.export_settings') }}"
-           class="btn btn-outline-success btn-sm">
-          <i class="bi bi-download me-1"></i>Exportar JSON
-        </a>
-      </div>
-    </div>
+  .db-card {
+    background: var(--bg-footer); border: 1px solid rgba(0,0,0,.04);
+    border-radius: 7px; padding: .5rem .65rem;
+    display: flex; flex-direction: column; gap: .3rem;
+  }
+  .db-card-head {
+    display: flex; align-items: center; gap: .4rem;
+  }
+  .db-card-icon {
+    width: 28px; height: 28px; border-radius: 6px;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: .8rem; flex-shrink: 0;
+  }
+  .db-card-icon-olive { background: var(--olive-100); color: var(--olive-700); }
+  .db-card-icon-blue  { background: rgba(13,110,253,.08); color: #0d6efd; }
+  .db-card-title { font-size: .68rem; font-weight: 700; color: var(--text-main); }
+  .db-card-desc  { font-size: .58rem; color: var(--text-muted); line-height: 1.3; }
+
+  .db-btn {
+    font-size: .62rem; font-weight: 600;
+    padding: .22rem .5rem; border-radius: 5px;
+    display: inline-flex; align-items: center; gap: .25rem;
+    border: none; cursor: pointer;
+    align-self: flex-start;
+  }
+  .db-btn-olive {
+    background: var(--olive-700); border: 1px solid var(--olive-700); color: #fff;
+  }
+  .db-btn-olive:hover { background: var(--olive-900); border-color: var(--olive-900); color: #fff; }
+
+  .db-file-input {
+    font-size: .6rem; padding: .2rem .45rem; border-radius: 5px;
+    border: 1px solid var(--border);
+  }
+
+  .db-warn {
+    padding: .22rem .45rem; border-radius: 4px;
+    font-size: .56rem; background: rgba(185,28,28,.04);
+    border: 1px solid rgba(185,28,28,.1); color: var(--danger);
+  }
+</style>
+
+{% set wip_mode = 'card' %}
+{% set wip_text = 'Módulo de relatórios avançados chegando em breve.' %}
+{% include 'components/wip.html' %}
+
+
+<!-- 
+<div class="db-sec">
+  <div class="text-muted mb-2" style="font-size:.6rem;">
+    Exporte configurações para outro computador ou importe um arquivo existente.
+  </div>
+  <div class="db-warn mb-2">
+    <i class="bi bi-shield-lock-fill me-1"></i>A senha de administrador <strong>não</strong> é incluída na exportação.
   </div>
 
-  {# ── Importar ─────────────────────────────────────────────────── #}
-  <div class="col-12 col-md-6">
-    <div class="card bg-light border-0 h-100">
-      <div class="card-body text-center">
-        <i class="bi bi-box-arrow-in-down fs-2 text-primary d-block mb-2"></i>
-        <h6 class="fw-semibold">Importar Configurações</h6>
-        <p class="text-muted small">
-          Envie um arquivo <code>.json</code> exportado anteriormente.
-        </p>
-        <form method="post" action="{{ url_for('admin.import_settings') }}"
-              enctype="multipart/form-data"
-              onsubmit="return confirm('Isso substituirá as configurações atuais. Continuar?')">
-          <div class="mb-2">
-            <input type="file" name="config_file" class="form-control form-control-sm"
-                   accept=".json" required>
-          </div>
-          <button type="submit" class="btn btn-outline-primary btn-sm">
-            <i class="bi bi-upload me-1"></i>Importar JSON
-          </button>
-        </form>
+  <div class="db-exp-imp-row">
+
+    {# ── Exportar ── #}
+    <div class="db-card">
+      <div class="db-card-head">
+        <span class="db-card-icon db-card-icon-olive"><i class="bi bi-box-arrow-up"></i></span>
+        <div class="db-card-title">Exportar</div>
       </div>
+      <div class="db-card-desc">
+        Baixa <code style="font-size:.56rem;background:var(--olive-100);color:var(--olive-900);padding:1px 4px;border-radius:3px;">.json</code> com todas as configurações atuais.
+      </div>
+      <button type="button" class="btn db-btn db-btn-olive" id="btn-export">
+        <i class="bi bi-download me-1"></i>Exportar JSON
+      </button>
     </div>
+
+    {# ── Importar ── #}
+    <div class="db-card">
+      <div class="db-card-head">
+        <span class="db-card-icon db-card-icon-blue"><i class="bi bi-box-arrow-in-down"></i></span>
+        <div class="db-card-title">Importar</div>
+      </div>
+      <div class="db-card-desc">
+        Envie um <code style="font-size:.56rem;background:var(--olive-100);color:var(--olive-900);padding:1px 4px;border-radius:3px;">.json</code> exportado anteriormente.
+      </div>
+      <form method="post" action="{{ url_for('admin.import_settings') }}"
+            enctype="multipart/form-data" class="m-0"
+            onsubmit="return confirm('Isso substituirá as configurações atuais. Continuar?')">
+        <input type="file" name="config_file" class="form-control db-file-input mb-2"
+               accept=".json" required>
+        <button type="submit" class="btn db-btn db-btn-olive">
+          <i class="bi bi-upload me-1"></i>Importar
+        </button>
+      </form>
+    </div>
+
   </div>
 </div>
+
+<script>
+(function(){
+  const btnExport = document.getElementById("btn-export");
+  if (!btnExport) return;
+
+  btnExport.addEventListener("click", async function() {
+    const original = btnExport.innerHTML;
+    btnExport.disabled = true;
+    btnExport.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Exportando...';
+    try {
+      const resp = await fetch("{{ url_for('admin.export_settings') }}");
+      if (!resp.ok) throw new Error("Falha na exportação");
+
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      
+      // Extrai o nome do arquivo do header Content-Disposition
+      const disposition = resp.headers.get("Content-Disposition");
+      let filename = "configuracoes.json";
+      if (disposition) {
+        const match = disposition.match(/filename="?([^"]+)"?/);
+        if (match) filename = match[1];
+      }
+      
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch(e) {
+      alert(e.message || "Erro ao exportar");
+    } finally {
+      btnExport.disabled = false;
+      btnExport.innerHTML = original;
+    }
+  });
+})();
+</script> -->

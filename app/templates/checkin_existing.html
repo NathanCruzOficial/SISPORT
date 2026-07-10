@@ -1,241 +1,453 @@
 {% extends "base.html" %}
-{% import "components/visitor_category.html" as visitor_category %}
+{% import "components/identity_card.html" as id_component %}
 
+{# ═══════════ VARIÁVEL GLOBAL DO TEMPLATE ═══════════ #}
+{% set visitas_abertas = visitor.visits|selectattr('check_out', 'none')|list|length %}
+
+{% block toolbar_icon %}<i class="bi bi-person-plus"></i>{% endblock %}
+{% block toolbar_title %}Registro de Entrada{% endblock %}
+{% block toolbar_subtitle %}<div class="toolbar-subtitle">{{ visitor.name }}</div>{% endblock %}
+{% block toolbar_actions %}
+<a class="btn btn-outline-secondary btn-sm" href="{{ url_for('visitor.identify') }}">
+  <i class="bi bi-arrow-left me-1"></i>Voltar
+</a>
+{% endblock %}
 
 
 {% block content %}
-<div class="center-card">
-  <div class="card-body">
+<style>
+  /* ═══════════ WRAPPER ═══════════ */
+  .ck-wrapper {
+    display: flex;
+    flex-direction: column;
+  }
+  .ck-scroll-area {
+    flex: 1;
+  }
 
-    {# ═══════════════════════════════════════════════════════════════
-       CARTEIRA DO VISITANTE — Estilo Documento de Identidade
-       ═══════════════════════════════════════════════════════════════ #}
-    <div class="id-card mb-3">
+  /* ═══════════ GRID 5/12 ─ 7/12 ═══════════ */
+  .ck-grid {
+    display: grid;
+    grid-template-columns: 5fr 7fr;
+    gap: 1rem;
+    padding: .75rem;
+    align-items: start;
+  }
+  @media (max-width: 860px) {
+    .ck-grid { grid-template-columns: 1fr; }
+  }
+  .ck-grid.ck-inside-layout {
+    grid-template-columns: 1fr;
+    max-width: 460px;
+    margin: 0 auto;
+    justify-items: center;
+  }
+  .ck-col-left {
+    position: sticky;
+    top: .75rem;
+    width: 100%;
+  }
+  .ck-col-right {
+    min-width: 0;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
 
-      {# ── Cabeçalho institucional ─────────────────────────────────── #}
-      <div class="id-card-header">
-        <div class="d-flex align-items-center gap-3">
-          <i class="bi bi-person-vcard-fill fs-3 opacity-100"></i>
-          <div>
-            <h2 class="id-card-title mb-0">Carteira de Visitante</h2>
-            <div class="small opacity-75">SISPORT — Sistema de Portaria</div>
-          </div>
+  /* ═══════════ PAINEL DE DESTINO ═══════════ */
+  .ck-dest-panel {
+    background: var(--bg-card);
+    border: 1px solid rgba(0,0,0,.06);
+    border-radius: 10px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+  }
+  .ck-dest-header {
+    padding: .5rem .7rem;
+    background: var(--bg-footer);
+    border-bottom: 1px solid rgba(0,0,0,.05);
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    flex-shrink: 0;
+  }
+  .ck-dest-header-icon {
+    width: 28px; height: 28px;
+    border-radius: 7px;
+    background: var(--olive-100);
+    color: var(--olive-700);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: .8rem;
+  }
+  .ck-dest-title { font-size: .7rem; font-weight: 700; }
+  .ck-dest-subtitle { font-size: .55rem; color: var(--text-muted); }
+  .ck-dest-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: .6rem;
+    min-height: 0;
+  }
+
+  /* ═══════════ PAINEL DE MOTIVO ═══════════ */
+  .ck-reason-panel {
+    background: var(--bg-card);
+    border: 1px solid rgba(0,0,0,.06);
+    border-radius: 10px;
+    overflow: hidden;
+    flex-shrink: 0;
+    margin-top: .75rem;
+  }
+  .ck-reason-header {
+    padding: .45rem .7rem;
+    background: var(--bg-footer);
+    border-bottom: 1px solid rgba(0,0,0,.05);
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+  }
+  .ck-reason-body {
+    padding: .5rem .7rem;
+  }
+  .ck-reason-body label {
+    font-size: .6rem;
+    font-weight: 700;
+    margin-bottom: .15rem;
+    display: block;
+  }
+  .ck-reason-body textarea {
+    width: 100%;
+    font-size: .68rem;
+    padding: .35rem .5rem;
+    border: 1px solid rgba(0,0,0,.12);
+    border-radius: 6px;
+    resize: vertical;
+    min-height: 42px;
+    max-height: 70px;
+    background: #fff;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  .ck-reason-body textarea:focus {
+    outline: none;
+    border-color: var(--olive-700);
+    box-shadow: 0 0 0 2px rgba(74,93,35,.08);
+  }
+
+  /* ═══════════ BARRA FIXA (agora fora do scroll) ═══════════ */
+  .ck-bottom-bar {
+    padding: .6rem .75rem;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+  }
+  .ck-bottom-bar.ck-bar-alert {
+    justify-content: stretch;
+  }
+
+  .ck-btn-register {
+    padding: .5rem 1.5rem;
+    border-radius: 7px;
+    font-size: .75rem;
+    font-weight: 700;
+    border: none;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background .2s, opacity .2s;
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    min-width: 180px;
+    justify-content: center;
+    height: 42px;
+  }
+  .ck-btn-register:disabled,
+  .ck-btn-register.is-disabled {
+    background: #D1D5DB;
+    color: #9CA3AF;
+    cursor: not-allowed;
+    opacity: .7;
+  }
+  .ck-btn-register:not(:disabled):not(.is-disabled) {
+    background: var(--olive-700);
+    color: #fff;
+    box-shadow: 0 1px 3px rgba(74,93,35,.15);
+  }
+  .ck-btn-register:not(:disabled):not(.is-disabled):hover {
+    background: var(--olive-900);
+  }
+
+  /* ═══════════ DESTINATION SELECTOR (scoped) ═══════════ */
+  .ck-dest-scroll .destination-selector { gap: .4rem; }
+  .ck-dest-scroll .destination-group { border-radius: 6px; }
+  .ck-dest-scroll .destination-group-header { padding: .35rem .55rem; }
+  .ck-dest-scroll .destination-group-title { font-size: .62rem; }
+  .ck-dest-scroll .destination-grid {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: .35rem;
+    padding: .4rem .55rem;
+  }
+  .ck-dest-scroll .destination-card {
+    padding: .4rem .5rem;
+    min-height: 48px;
+    border-radius: 6px;
+    gap: .35rem;
+  }
+  .ck-dest-scroll .destination-card-icon {
+    width: 24px; height: 24px;
+    border-radius: 5px;
+    font-size: .65rem;
+  }
+  .ck-dest-scroll .destination-card-name { font-size: .62rem; }
+  .ck-dest-scroll .destination-search { padding: 0; border: none !important; }
+  .ck-dest-scroll .destination-search .input-group { margin-bottom: .3rem; }
+  .ck-dest-scroll .destination-search input {
+    font-size: .65rem !important;
+    padding: .25rem .4rem;
+  }
+  .ck-dest-scroll .destination-search .muted { font-size: .52rem !important; }
+
+  /* ═══════════ ALERTA NA BARRA FIXA ═══════════ */
+  .ck-bar-alert-inner {
+    background: rgba(212,160,23,.06);
+    border: 1px solid rgba(212,160,23,.15);
+    border-left: 4px solid #D4A017;
+    border-radius: 8px;
+    padding: .55rem .75rem;
+    display: flex;
+    gap: .5rem;
+    align-items: flex-start;
+    width: 100%;
+  }
+  .ck-bar-alert-icon {
+    color: #D4A017;
+    font-size: 1rem;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .ck-bar-alert-body {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    flex-wrap: wrap;
+  }
+  .ck-bar-alert-title {
+    font-size: .72rem;
+    font-weight: 700;
+    color: #6B5B45;
+    white-space: nowrap;
+  }
+  .ck-bar-alert-text {
+    font-size: .65rem;
+    color: #6B5B45;
+  }
+  .ck-bar-alert-actions {
+    display: flex;
+    gap: .35rem;
+    flex-wrap: wrap;
+    margin-left: auto;
+  }
+  .ck-btn-sm {
+    font-size: .6rem;
+    font-weight: 600;
+    padding: .22rem .5rem;
+    border-radius: 5px;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: .25rem;
+    white-space: nowrap;
+  }
+  .ck-btn-gold {
+    background: #D4A017;
+    border: 1px solid #D4A017;
+    color: #fff;
+  }
+  .ck-btn-gold:hover { background: #B8860B; color: #fff; }
+  .ck-btn-outline {
+    background: transparent;
+    border: 1px solid rgba(0,0,0,.12);
+    color: var(--text-main);
+  }
+  .ck-btn-outline:hover {
+    border-color: var(--olive-700);
+    color: var(--olive-700);
+  }
+</style>
+
+
+
+{% set visitas_abertas = visitor.visits|selectattr('check_out', 'none')|list|length %}
+
+<div class="ck-wrapper">
+  <div class="ck-scroll-area">
+    <div class="px-3 px-md-4 pt-2">
+
+      <div class="ck-grid{% if visitas_abertas > 0 %} ck-inside-layout{% endif %}">
+
+        {# ── ESQUERDA (5/12): identidade ── #}
+        <div class="ck-col-left">
+          {{ id_component.identity_card(
+               visitor=visitor,
+               edit_url=url_for('visitor.visitor_edit', visitor_id=visitor.id),
+               show_stats=true
+             ) }}
         </div>
-        <a class="icon-btn" href="{{ url_for('visitor.visitor_edit', visitor_id=visitor.id) }}"
-           title="Editar visitante" aria-label="Editar visitante">
-          <i class="bi bi-pencil-square fs-5"></i>
-        </a>
+
+        {# ── DIREITA (7/12): destino + motivo (só se FORA) ── #}
+        {% if visitas_abertas == 0 %}
+        <div class="ck-col-right">
+
+          <form method="post"
+                action="{{ url_for('visitor.checkin_form', visitor_id=visitor.id) }}"
+                id="checkinForm"
+                style="display:flex;flex-direction:column;flex:1;min-height:0;">
+
+            {# Painel: Destino da Visita #}
+            <div class="ck-dest-panel">
+              <div class="ck-dest-header">
+                <div class="ck-dest-header-icon"><i class="bi bi-geo-alt"></i></div>
+                <div>
+                  <div class="ck-dest-title">Destino da Visita</div>
+                  <div class="ck-dest-subtitle">Selecione o local</div>
+                </div>
+              </div>
+              <div class="ck-dest-scroll">
+                {% include "components/destination_selector.html" %}
+              </div>
+            </div>
+
+            {# Painel: Motivo #}
+            <div class="ck-reason-panel">
+              <div class="ck-reason-header">
+                <div class="ck-dest-header-icon"><i class="bi bi-chat-left-text"></i></div>
+                <div>
+                  <div class="ck-dest-title">Motivo da Visita</div>
+                  <div class="ck-dest-subtitle">
+                    {% if visit_reason_required %}Obrigatório{% else %}Opcional{% endif %}
+                  </div>
+                </div>
+              </div>
+              <div class="ck-reason-body">
+                <label for="reasonInput">
+                  Descreva brevemente
+                  {% if visit_reason_required %}
+                    <span style="color:var(--danger);">*</span>
+                  {% endif %}
+                </label>
+                <textarea name="reason" id="reasonInput" rows="2"
+                          placeholder="Ex: Reunião, entrega, manutenção..."
+                          {% if visit_reason_required %}required{% endif %}></textarea>
+              </div>
+            </div>
+
+          </form>
+        </div>
+        {% endif %}
+
       </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
 
-      <div class="id-card-body">
 
-        {# ── Linha principal: Foto + Dados ─────────────────────────── #}
-        <div class="d-flex flex-column flex-sm-row gap-3 align-items-center align-items-sm-start">
-
-          {# Foto 1:1 #}
-          <div class="text-center flex-shrink-0">
-            <div class="photo-box mx-auto" style="width:150px;height:150px;border-radius:8px;">
-              {% if visitor.photo_data %}
-                <img src="{{ photo_url('visitor', visitor.id) }}"alt="Foto do visitante" class="w-100 h-100" style="object-fit: cover;">
-              {% else %}
-                <img src="{{ url_for('static', filename='img/avatar-placeholder.jpg') }}"
-                      alt="Sem foto"
-                      class="w-100 h-100 opacity-50"
-                      style="object-fit: cover;">
-              {% endif %}
-            </div>
-            <div class="mt-2">
-              {{ visitor_category.badge(visitor.category) }}
-            </div>
-
-          </div>
-
-          {# Dados de identificação #}
-          <div class="flex-grow-1 w-100">
-
-            {# Nome em destaque #}
-            <div class="border-bottom pb-2 mb-3">
-              <div class="text-uppercase fw-bold text-muted" style="font-size:.6rem;letter-spacing:1.5px;">Nome Completo</div>
-              <div class="fw-bold fs-5">{{ visitor.name }}</div>
-            </div>
-
-            <div class="row g-2">
-
-              <div class="col-6 col-lg-4">
-                <div class="text-uppercase fw-bold text-muted" style="font-size:.6rem;letter-spacing:1px;">CPF</div>
-                <div class="fw-semibold">{{ visitor.cpf }}</div>
-              </div>
-
-              <div class="col-6 col-lg-4">
-                <div class="text-uppercase fw-bold text-muted" style="font-size:.6rem;letter-spacing:1px;">Telefone</div>
-                <div class="fw-semibold">{{ visitor.phone }}</div>
-              </div>
-
-              {% if visitor.email %}
-              <div class="col-12 col-lg-4">
-                <div class="text-uppercase fw-bold text-muted" style="font-size:.6rem;letter-spacing:1px;">E-mail</div>
-                <div class="fw-semibold small text-truncate">{{ visitor.email }}</div>
-              </div>
-              {% endif %}
-
-              <div class="col-12 col-lg-6">
-                <div class="text-uppercase fw-bold text-muted" style="font-size:.6rem;letter-spacing:1px;">Mãe</div>
-                <div class="fw-semibold">{{ visitor.mom_name }}</div>
-              </div>
-
-              {% if visitor.father_name %}
-              <div class="col-12 col-lg-6">
-                <div class="text-uppercase fw-bold text-muted" style="font-size:.6rem;letter-spacing:1px;">Pai</div>
-                <div class="fw-semibold">{{ visitor.father_name }}</div>
-              </div>
-              {% endif %}
-
-              {% if visitor.empresa %}
-              <div class="col-12">
-                <div class="text-uppercase fw-bold text-muted" style="font-size:.6rem;letter-spacing:1px;">Empresa / Vínculo</div>
-                <div class="fw-semibold">{{ visitor.empresa }}</div>
-              </div>
-              {% endif %}
-
-            </div>
-          </div>
-        </div>
-
-        {# ── Barra de estatísticas ─────────────────────────────────── #}
-        {% set total_visitas = visitor.visits|length %}
-        {% set visitas_abertas = visitor.visits|selectattr('check_out', 'none')|list|length %}
-        <div class="d-flex flex-wrap gap-3 mt-4 pt-3 border-top">
-
-          {# Total de visitas #}
-          <div class="d-flex align-items-center gap-2">
-            <div class="d-inline-flex align-items-center justify-content-center rounded-circle bg-success bg-opacity-10"
-                 style="width:36px;height:36px;">
-              <i class="bi bi-door-open text-success"></i>
-            </div>
-            <div>
-              <div class="text-uppercase fw-bold text-muted" style="font-size:.55rem;letter-spacing:1px;">Total de Visitas</div>
-              <div class="fw-bold">{{ total_visitas }}</div>
-            </div>
-          </div>
-
-          {# Última visita #}
-          <div class="d-flex align-items-center gap-2">
-            <div class="d-inline-flex align-items-center justify-content-center rounded-circle bg-primary bg-opacity-10"
-                 style="width:36px;height:36px;">
-              <i class="bi bi-calendar-check text-primary"></i>
-            </div>
-            <div>
-              <div class="text-uppercase fw-bold text-muted" style="font-size:.55rem;letter-spacing:1px;">Última Visita</div>
-              <div class="fw-bold">
-                {% if total_visitas > 0 %}
-                  {{ visitor.visits[-1].check_in.strftime('%d/%m/%Y %H:%M') }}
-                {% else %}
-                  Primeira vez
-                {% endif %}
-              </div>
-            </div>
-          </div>
-
-          {# Status atual #}
-          <div class="d-flex align-items-center gap-2">
-            <div class="d-inline-flex align-items-center justify-content-center rounded-circle
-                        {% if visitas_abertas > 0 %}bg-warning bg-opacity-10{% else %}bg-secondary bg-opacity-10{% endif %}"
-                 style="width:36px;height:36px;">
-              <i class="bi {% if visitas_abertas > 0 %}bi-person-walking text-warning{% else %}bi-person-check text-secondary{% endif %}"></i>
-            </div>
-            <div>
-              <div class="text-uppercase fw-bold text-muted" style="font-size:.55rem;letter-spacing:1px;">Status</div>
-              <div class="fw-bold">
-                {% if visitas_abertas > 0 %}
-                  <span class="text-warning">No interior</span>
-                {% else %}
-                  <span class="text-secondary">Fora</span>
-                {% endif %}
-              </div>
-            </div>
-          </div>
-
-        </div>
-
-      </div>{# /id-card-body #}
-    </div>{# /id-card #}
-
-    {# ═══════════════════════════════════════════════════════════════
-       DESTINO — Registro de entrada  OU  Aviso de visita em aberto
-       ═══════════════════════════════════════════════════════════════ #}
-
-    {% if visitas_abertas > 0 %}
-      {# ── VISITANTE JÁ ESTÁ NO INTERIOR — Bloqueia nova entrada ──── #}
-      <div class="alert alert-warning border-warning shadow-sm d-flex align-items-start gap-3 mb-0" role="alert">
-        <div class="d-inline-flex align-items-center justify-content-center rounded-circle bg-warning bg-opacity-25 flex-shrink-0"
-             style="width:48px;height:48px;">
-          <i class="bi bi-exclamation-triangle-fill text-warning fs-4"></i>
-        </div>
-        <div class="flex-grow-1">
-          <h5 class="alert-heading fw-bold mb-1">Visitante já está no interior do aquartelamento</h5>
-          <p class="mb-2">
-            <strong>{{ visitor.name }}</strong> possui
-            <strong>{{ visitas_abertas }} visita{{ 's' if visitas_abertas > 1 }} em aberto</strong>.
-            É necessário registrar a saída antes de iniciar uma nova entrada.
-          </p>
-          <hr class="my-2 opacity-25">
-          <div class="d-flex flex-wrap gap-2">
-            <a href="{{ url_for('visitor.open_visits') }}" class="btn btn-warning btn-sm fw-semibold">
-              <i class="bi bi-box-arrow-right me-1"></i>Ir para Visitas em Aberto
-            </a>
-            <a href="{{ url_for('visitor.identify') }}" class="btn btn-outline-secondary btn-sm">
-              <i class="bi bi-arrow-left me-1"></i>Voltar ao início
-            </a>
-          </div>
+{# ═══════════ BARRA FIXA ACIMA DO RODAPÉ ═══════════ #}
+{% block bottom_bar %}
+<div class="app-bottom-bar">
+  {% if visitas_abertas == 0 %}
+  <div class="ck-bottom-bar">
+    <button type="submit" form="checkinForm"
+            class="ck-btn-register is-disabled"
+            id="btnRegister" disabled>
+      <i class="bi bi-check-lg"></i>Registrar Entrada
+    </button>
+  </div>
+  {% else %}
+  <div class="ck-bottom-bar ck-bar-alert">
+    <div class="ck-bar-alert-inner">
+      <div class="ck-bar-alert-icon"><i class="bi bi-exclamation-triangle-fill"></i></div>
+      <div class="ck-bar-alert-body">
+        <span class="ck-bar-alert-title">Visitante já está no interior</span>
+        <span class="ck-bar-alert-text">
+          <strong>{{ visitor.name }}</strong> —
+          <strong>{{ visitas_abertas }} visita{{ 's' if visitas_abertas > 1 }}</strong> em aberto
+        </span>
+        <div class="ck-bar-alert-actions">
+          <a href="{{ url_for('visitor.open_visits') }}" class="ck-btn-sm ck-btn-gold">
+            <i class="bi bi-box-arrow-right"></i>Visitas em Aberto
+          </a>
+          <a href="{{ url_for('visitor.identify') }}" class="ck-btn-sm ck-btn-outline">
+            <i class="bi bi-arrow-left"></i>Início
+          </a>
         </div>
       </div>
-
-    {% else %}
-      {# ── VISITANTE FORA — Exibe formulário de destino ────────────── #}
-      <div class="sheet p-3 p-md-4">
-        <div class="d-flex align-items-center justify-content-between mb-2">
-          <h3 class="h5 mb-0"><i class="bi bi-geo-alt me-1 text-success"></i>Destino</h3>
-          <div class="muted small">Registrar entrada</div>
-        </div>
-
-        <form method="post"
-            action="{{ url_for('visitor.checkin_form', visitor_id=visitor.id) }}"
-            data-requires-destination="1">
-
-        <div class="mb-4">
-          {% include "components/destination_selector.html" %}
-        </div>
-
-        <div class="row g-3 align-items-end">
-          <div class="col-12 col-md-8">
-            <label class="form-label">
-              Motivo da visita
-              {% if visit_reason_required %}
-                <span class="text-danger">*</span>
-              {% else %}
-                <span class="text-muted small">(opcional)</span>
-              {% endif %}
-            </label>
-
-            <textarea class="form-control form-control-lg"
-                      name="reason"
-                      rows="2"
-                      {% if visit_reason_required %}required{% endif %}
-                      placeholder="Ex: Reunião, entrega, manutenção, atendimento..."></textarea>
-          </div>
-
-          <div class="col-12 col-md-4">
-            <button class="btn btn-success btn-lg w-100 py-3" type="submit">
-              <i class="bi bi-check-lg me-1"></i>Registrar visita
-            </button>
-          </div>
-        </div>
-      </form>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
 
 
-      </div>
-    {% endif %}
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const hiddenInput    = document.getElementById('destination_place_id');
+  const reasonInput    = document.getElementById('reasonInput');
+  const btnRegister    = document.getElementById('btnRegister');
+  const reasonRequired = {{ 'true' if visit_reason_required else 'false' }};
 
-  </div>{# /card-body #}
-</div>{# /center-card #}
+  if (!hiddenInput || !btnRegister) return;
+
+  function updateBtnState() {
+    const hasDestination = hiddenInput.value && hiddenInput.value.trim() !== '';
+    const hasReason      = reasonRequired
+                           ? (reasonInput && reasonInput.value.trim() !== '')
+                           : true;
+
+    const canSubmit = hasDestination && hasReason;
+
+    btnRegister.disabled = !canSubmit;
+    canSubmit
+      ? btnRegister.classList.remove('is-disabled')
+      : btnRegister.classList.add('is-disabled');
+  }
+
+  new MutationObserver(updateBtnState).observe(hiddenInput, {
+    attributes: true,
+    attributeFilter: ['value']
+  });
+
+  if (reasonInput && reasonRequired) {
+    reasonInput.addEventListener('input', updateBtnState);
+  }
+
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('[data-destination-card]')) {
+      setTimeout(updateBtnState, 80);
+    }
+  });
+
+  updateBtnState();
+
+  // ── Spinner ao submeter ──
+  const form = document.getElementById('checkinForm');
+  if (form) {
+    form.addEventListener('submit', function(e) {
+      if (!hiddenInput.value || !hiddenInput.value.trim()) {
+        e.preventDefault();
+        alert('Selecione um destino antes de registrar a entrada.');
+        return false;
+      }
+      btnRegister.disabled = true;
+      btnRegister.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Registrando...';
+    });
+  }
+});
+</script>
 {% endblock %}

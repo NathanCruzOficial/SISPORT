@@ -1,99 +1,220 @@
-<div class="card border-0 shadow-sm">
-  <div class="card-header bg-white d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
-    <div>
-      <h5 class="mb-1">
-        <i class="bi bi-folder2-open text-warning me-2"></i>
-        Grupos e Locais de Visitação
-      </h5>
-      <div class="text-muted small">
-        Gerencie categorias/grupos e locais visitáveis.
+<style>
+  .vis-section { font-size: .72rem; color: var(--text-main); }
+  .vis-section .text-muted { color: var(--text-muted) !important; font-size: .65rem; }
+
+  .vis-card {
+    background: var(--bg-card);
+    border: 1px solid rgba(0,0,0,.05);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .vis-card-head {
+    padding: .6rem .8rem;
+    background: var(--bg-footer);
+    border-bottom: 1px solid rgba(0,0,0,.05);
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+  }
+  .vis-card-icon {
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    background: var(--olive-100);
+    color: var(--olive-700);
+    display: inline-flex;
+    align-items: center; justify-content: center;
+    font-size: .9rem;
+    flex-shrink: 0;
+  }
+  .vis-card-title {
+    font-size: .74rem;
+    font-weight: 700;
+    color: var(--text-main);
+    line-height: 1.2;
+  }
+  .vis-card-subtitle {
+    font-size: .6rem;
+    color: var(--text-muted);
+  }
+
+  .vis-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: .68rem;
+  }
+  .vis-table th {
+    padding: .4rem .7rem;
+    font-size: .6rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+    color: var(--text-muted);
+    background: var(--bg-footer);
+    border-bottom: 1px solid rgba(0,0,0,.05);
+    text-align: left;
+  }
+  .vis-table td {
+    padding: .5rem .7rem;
+    border-bottom: 1px solid rgba(0,0,0,.04);
+    vertical-align: middle;
+  }
+  .vis-table tbody tr:hover { background: rgba(74,93,35,.02); }
+  .vis-table tbody tr:last-child td { border-bottom: none; }
+
+  .vis-group-name {
+    font-weight: 700;
+    color: var(--text-main);
+    display: flex;
+    align-items: center;
+    gap: .3rem;
+  }
+  .vis-group-path {
+    font-size: .58rem;
+    color: var(--text-muted);
+    margin-top: 1px;
+  }
+  .vis-badge {
+    display: inline-block;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-size: .58rem;
+    font-weight: 600;
+    line-height: 1.3;
+  }
+  .vis-badge-olive {
+    background: var(--olive-100);
+    color: var(--olive-900);
+  }
+  .vis-badge-muted {
+    background: rgba(0,0,0,.04);
+    color: var(--text-muted);
+  }
+  .vis-color-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-size: .58rem;
+    font-weight: 600;
+    font-family: monospace;
+  }
+
+  .vis-btn {
+    font-size: .64rem;
+    font-weight: 600;
+    padding: .25rem .55rem;
+    border-radius: 6px;
+    border: 1px solid rgba(0,0,0,.1);
+    background: transparent;
+    color: var(--text-main);
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: .25rem;
+  }
+  .vis-btn:hover { border-color: var(--olive-700); color: var(--olive-700); }
+  .vis-btn-primary {
+    background: var(--olive-700);
+    border-color: var(--olive-700);
+    color: #fff;
+  }
+  .vis-btn-primary:hover { background: var(--olive-900); border-color: var(--olive-900); color: #fff; }
+
+  .vis-empty {
+    padding: 1.8rem 1rem;
+    text-align: center;
+    font-size: .65rem;
+    color: var(--text-muted);
+  }
+  .vis-empty i {
+    font-size: 1.2rem;
+    opacity: .4;
+    display: block;
+    margin-bottom: .3rem;
+  }
+</style>
+
+<div class="vis-section">
+  <div class="vis-card">
+    <div class="vis-card-head">
+      <span class="vis-card-icon"><i class="bi bi-folder2-open"></i></span>
+      <div class="flex-fill">
+        <div class="vis-card-title">Grupos e Locais de Visitação</div>
+        <div class="vis-card-subtitle">Gerencie categorias/grupos e locais visitáveis.</div>
       </div>
+      <a href="{{ url_for('admin.visitor_destinations_root') }}" class="vis-btn vis-btn-primary">
+        <i class="bi bi-diagram-3"></i>
+        Gerenciar
+      </a>
     </div>
 
-    <a href="{{ url_for('admin.visitor_destinations_root') }}"
-       class="btn btn-primary">
-      <i class="bi bi-diagram-3 me-1"></i>
-      Gerenciar grupos e locais
-    </a>
-  </div>
-
-  <div class="card-body p-0">
-    <div class="table-responsive">
-      <table class="table table-hover align-middle mb-0">
-        <thead class="table-light">
-          <tr>
-            <th>Grupo/Categoria</th>
-            <th style="width: 180px;">Locais</th>
-            <th style="width: 180px;">Subgrupos</th>
-            <th style="width: 120px;">Cor</th>
-            <th class="text-end" style="width: 180px;">Ações</th>
-          </tr>
-        </thead>
-
-        <tbody>
-          {% if visitor_groups_flat %}
-            {% for group in visitor_groups_flat %}
-              <tr>
-                <td>
-                  <div class="fw-semibold" style="padding-left: {{ group.depth * 22 }}px;">
-                    {% if group.is_root %}
-                      <i class="bi bi-house-door-fill text-warning me-1"></i>
-                    {% else %}
-                      <i class="bi bi-folder-fill me-1" style="color: {{ group.color }};"></i>
-                    {% endif %}
-
-                    {{ group.name }}
-
-                    {% if group.is_root %}
-                      <span class="badge bg-warning text-dark ms-2">
-                        Raiz
-                      </span>
-                    {% endif %}
-                  </div>
-
-                  <div class="small text-muted" style="padding-left: {{ group.depth * 22 }}px;">
-                    {{ group.path }}
-                  </div>
-                </td>
-
-                <td>
-                  <span class="badge bg-success">
-                    {{ group.total_places_count() }} local(is)
-                  </span>
-                </td>
-
-                <td>
-                  <span class="badge bg-secondary">
-                    {{ group.total_groups_count() }} grupo(s)
-                  </span>
-                </td>
-
-                <td>
-                  <span class="badge"
-                        style="background-color: {{ group.color }}; color: #111;">
-                    {{ group.color }}
-                  </span>
-                </td>
-
-                <td class="text-end">
-                  <a href="{{ url_for('admin.visitor_destinations_group', group_id=group.id) }}"
-                     class="btn btn-sm btn-outline-primary">
-                    <i class="bi bi-pencil-square me-1"></i>
-                    Gerenciar
-                  </a>
-                </td>
-              </tr>
-            {% endfor %}
-          {% else %}
+    <table class="vis-table">
+      <thead>
+        <tr>
+          <th>Grupo/Categoria</th>
+          <th style="width:130px;">Locais</th>
+          <th style="width:130px;">Subgrupos</th>
+          <th style="width:100px;">Cor</th>
+          <th class="text-end" style="width:130px;">Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if visitor_groups_flat %}
+          {% for group in visitor_groups_flat %}
             <tr>
-              <td colspan="5" class="text-center text-muted py-5">
-                <i class="bi bi-folder2-open fs-1 d-block mb-2"></i>
-                Nenhum grupo encontrado.
+              <td>
+                <div class="vis-group-name" style="padding-left: {{ group.depth * 18 }}px;">
+                  {% if group.is_root %}
+                    <i class="bi bi-house-door-fill" style="color:var(--olive-700);"></i>
+                  {% else %}
+                    <i class="bi bi-folder-fill" style="color:{{ group.color }};"></i>
+                  {% endif %}
+                  {{ group.name }}
+                  {% if group.is_root %}
+                    <span class="vis-badge vis-badge-olive">Raiz</span>
+                  {% endif %}
+                </div>
+                <div class="vis-group-path" style="padding-left: {{ group.depth * 18 }}px;">
+                  {{ group.path }}
+                </div>
+              </td>
+              <td>
+                <span class="vis-badge vis-badge-olive">
+                  <i class="bi bi-geo-alt me-1"></i>{{ group.total_places_count() }}
+                </span>
+              </td>
+              <td>
+                <span class="vis-badge vis-badge-muted">
+                  <i class="bi bi-folder me-1"></i>{{ group.total_groups_count() }}
+                </span>
+              </td>
+              <td>
+                <span class="vis-color-chip"
+                      style="background:{{ group.color }}20;color:{{ group.color }};">
+                  <i class="bi bi-circle-fill" style="font-size:.4rem;"></i>
+                  {{ group.color }}
+                </span>
+              </td>
+              <td class="text-end">
+                <a href="{{ url_for('admin.visitor_destinations_group', group_id=group.id) }}"
+                   class="vis-btn">
+                  <i class="bi bi-pencil"></i> Gerenciar
+                </a>
               </td>
             </tr>
-          {% endif %}
-        </tbody>
-      </table>
-    </div>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="5">
+              <div class="vis-empty">
+                <i class="bi bi-folder2-open"></i>
+                Nenhum grupo encontrado.
+              </div>
+            </td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
   </div>
 </div>

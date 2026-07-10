@@ -1,0 +1,119 @@
+<style>
+/* ===== Componente WIP ===== */
+.wip-banner {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: linear-gradient(135deg, #fff3cd, #ffe69c);
+    color: #664d03;
+    border: 1px dashed #ffda6a;
+    border-radius: 8px;
+    padding: 6px 14px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+}
+
+.wip-banner .wip-icon {
+    font-size: 1rem;
+    animation: wip-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes wip-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: 0.5; transform: scale(0.9); }
+}
+
+/* Card WIP — para seções inteiras */
+.wip-card {
+    position: relative;
+    background: repeating-linear-gradient(
+        45deg,
+        #fff8e1,
+        #fff8e1 10px,
+        #fff3cd 10px,
+        #fff3cd 20px
+    );
+    border: 2px dashed #ffc107;
+    border-radius: 12px;
+    padding: 40px 20px;
+    text-align: center;
+    color: #664d03;
+}
+
+.wip-card .wip-title {
+    font-size: 1.4rem;
+    font-weight: 700;
+    margin-bottom: 8px;
+}
+
+.wip-card .wip-subtitle {
+    font-size: 0.95rem;
+    opacity: 0.85;
+}
+
+.wip-card .wip-icon-big {
+    font-size: 2.5rem;
+    display: block;
+    margin-bottom: 12px;
+    animation: wip-spin 4s linear infinite;
+}
+
+@keyframes wip-spin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+}
+
+/* Overlay — para página inteira */
+.wip-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(255, 243, 205, 0.85);
+    backdrop-filter: blur(4px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    color: #664d03;
+    text-align: center;
+    padding: 20px;
+}
+
+.wip-overlay .wip-icon-big {
+    font-size: 4rem;
+    animation: wip-spin 4s linear infinite;
+    margin-bottom: 16px;
+}
+
+.wip-overlay h2 {
+    font-weight: 700;
+    margin-bottom: 8px;
+}
+</style>
+
+{# Uso: {% include 'components/wip.html' with context %} #}
+{# Ou passe uma variável: {% set wip_mode = 'card' %} #}
+
+{% if wip_mode is defined %}
+    {% if wip_mode == 'badge' %}
+        <span class="wip-banner">
+            <i class="bi bi-gear-fill wip-icon"></i>
+            {{ wip_text|default('Em desenvolvimento') }}
+        </span>
+
+    {% elif wip_mode == 'card' %}
+        <div class="wip-card">
+            <i class="bi bi-tools wip-icon-big"></i>
+            <div class="wip-title">Trabalho em Progresso</div>
+            <div class="wip-subtitle">{{ wip_text|default('Esta seção está sendo construída.') }}</div>
+        </div>
+
+    {% elif wip_mode == 'overlay' %}
+        <div class="wip-overlay">
+            <i class="bi bi-hammer wip-icon-big"></i>
+            <h2>Em construção</h2>
+            <p>{{ wip_text|default('Esta funcionalidade ainda está sendo desenvolvida.') }}</p>
+        </div>
+    {% endif %}
+{% endif %}

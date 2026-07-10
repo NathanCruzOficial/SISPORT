@@ -34,6 +34,7 @@ from ..controllers.visitor_controller import (
     checkout_visit,
     visitor_photo_update,
     _check_duplicate_fields,
+    wizard_create_visitor_and_finish,
 )
 from ..models.visitor_destination import VisitorDestinationGroup, VisitorDestinationPlace
 from ..models.settings import get_setting
@@ -362,18 +363,26 @@ def checkout(visit_id: int):
 @visitor_bp.route("/wizard", methods=["GET"])
 def wizard():
     """
-    Exibe o wizard de 3 etapas para novo cadastro de visitante.
+    Renderiza o wizard de cadastro de visitantes.
+    Apenas 2 etapas: dados e foto.
     """
-    if "wizard" not in session:
-        wizard_start_for_new_visitor()
+    w = session.get("wizard")
+    if not w:
+        return redirect(url_for("visitor.identify"))
+
+    step = w.get("step", 1)
+
+    # Se a sessão estiver em etapa residual (antiga etapa 3), reinicia
+    if step > 2:
+        return redirect(url_for("visitor.identify"))
 
     return render_template(
         "visitor_wizard.html",
-        wizard=session["wizard"],
-        destination_tree=_build_destination_tree(),
-        visit_reason_required=_visit_reason_required(),
+        wizard=w,
         visitor_categories=_active_categories(),
+        visit_reason_required=_visit_reason_required(),
     )
+
 
 
 @visitor_bp.route("/wizard/step1", methods=["POST"])
@@ -407,14 +416,20 @@ def wizard_step1():
 def wizard_step2():
     """
     Processa a Etapa 2 do wizard: foto do visitante.
+    Após salvar a foto, cria o visitante no banco e redireciona
+    para o formulário de destino (checkin), unificando o fluxo.
     """
     skip = request.form.get("skip")
     photo_data_url = None if skip else (request.form.get("photo_data_url") or "")
     try:
         wizard_step2_submit(photo_data_url)
+        visitor = wizard_create_visitor_and_finish()
+        flash("Visitante cadastrado. Agora defina o destino da entrada.", "success")
+        return redirect(url_for("visitor.checkin_form", visitor_id=visitor.id))
     except Exception as e:
         flash(str(e), "danger")
-    return redirect(url_for("visitor.wizard"))
+        return redirect(url_for("visitor.wizard"))
+
 
 
 @visitor_bp.route("/wizard/back/<int:step>", methods=["GET"])
@@ -424,10 +439,12 @@ def wizard_back(step: int):
     if not w:
         return redirect(url_for("visitor.identify"))
 
-    target = max(1, min(step, w.get("step", 1)))
+    # Wizard agora só tem 2 etapas
+    target = max(1, min(step, 2))
     w["step"] = target
     session["wizard"] = w
     return redirect(url_for("visitor.wizard"))
+
 
 
 @visitor_bp.route("/wizard/finish", methods=["POST"])
