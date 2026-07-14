@@ -1,10 +1,13 @@
 # -*- mode: python ; coding: utf-8 -*-
 
 datas = [
-    ('../icone.ico', '.'), 
+    ('../icone.ico', '.'),
     ("../app/templates", "app/templates"),
     ("../app/static", "app/static"),
+    ("../migrations", "migrations"),          # ← ADICIONE ESTA LINHA
+    ("../migrations/versions", "migrations/versions"),  # ← Garante as versões
 ]
+
 
 a = Analysis(
     ['../main.py'],

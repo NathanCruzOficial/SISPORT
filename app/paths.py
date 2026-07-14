@@ -171,3 +171,13 @@ def config_path(filename: str = "settings.json") -> Path:
     :return: (Path) Caminho completo: CONFIG_DIR/<filename>.
     """
     return CONFIG_DIR / filename
+
+def migrations_path() -> str:
+    """
+    Retorna o caminho absoluto da pasta de migrations do Alembic.
+    Em dev: caminho relativo ao diretório de trabalho.
+    No .exe: caminho dentro de _MEIPASS.
+
+    :return: (str) Caminho da pasta migrations/.
+    """
+    return resource_path(os.path.join("migrations"))

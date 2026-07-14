@@ -30,7 +30,7 @@ import shutil
 from datetime import datetime
 from pathlib import Path
 
-from app.paths import APP_DIR, ensure_app_dirs, log_path, icon_path
+from app.paths import APP_DIR, ensure_app_dirs, log_path, icon_path, migrations_path
 
 
 # =====================================================================
@@ -225,34 +225,6 @@ def _add_console_log_handler():
 # Funções — Banco de Dados / Migrations
 # =====================================================================
 
-def _get_migrations_dir() -> str:
-    """
-    Localiza o diretório de migrations do Alembic.
-
-    Em desenvolvimento:
-        ./migrations
-
-    Em build PyInstaller:
-        tenta localizar migrations dentro de sys._MEIPASS, caso tenha
-        sido incluída no .spec.
-
-    :return: Caminho string para o diretório migrations.
-    """
-    if getattr(sys, "frozen", False):
-        base_dir = Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
-        bundled_migrations = base_dir / "migrations"
-
-        if bundled_migrations.exists():
-            return str(bundled_migrations)
-
-    project_migrations = Path(__file__).resolve().parent / "migrations"
-
-    if project_migrations.exists():
-        return str(project_migrations)
-
-    return "migrations"
-
-
 def _get_sqlite_database_path(app) -> Path | None:
     """
     Obtém o caminho físico do arquivo SQLite a partir da configuração
@@ -432,7 +404,7 @@ def atualizar_banco(app):
     from app.extensions import db
     from flask_migrate import upgrade
 
-    migrations_dir = _get_migrations_dir()
+    migrations_dir = migrations_path()
 
     with app.app_context():
         log.info("Iniciando verificação/atualização do banco de dados...")
