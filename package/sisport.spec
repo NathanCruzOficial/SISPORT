@@ -14,7 +14,10 @@ a = Analysis(
     pathex=[],
     binaries=[],
     datas=datas,
-    hiddenimports=[],
+    hiddenimports=[
+    'logging.config',        # ← ADICIONE
+    'logging.handlers',      # ← preventivo
+    ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
