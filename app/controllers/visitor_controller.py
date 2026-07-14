@@ -464,15 +464,17 @@ def register_checkin(visitor: Visitor, destination: str, reason: str = "") -> in
 
 
 
-def checkout_visit(visit_id: int):
+def checkout_visit(visit_id: int, checkout_time: datetime = None):
     """
     Registra a saída (check-out) de uma visita em aberto.
+    Se checkout_time for fornecido, usa-o; senão, usa datetime.now().
     """
     visit = db.session.get(Visit, visit_id)
     if not visit:
         raise ValueError("Visita não encontrada.")
     if visit.check_out is None:
-        visit.check_out = datetime.now()
+        visit.check_out = checkout_time if checkout_time else datetime.now()
         visit.visitor.last_checkout_at = visit.check_out
         db.session.commit()
     return visit
+

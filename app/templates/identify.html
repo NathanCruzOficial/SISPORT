@@ -13,6 +13,36 @@
 {% endblock %}
 
 {% block content %}
+
+{# ═══════════════════════════════════════════════════════════════
+   CSS: Tempo Excedido
+   ═══════════════════════════════════════════════════════════════ #}
+<style>
+  .tr-exceeded td {
+    background: rgba(220, 53, 69, 0.04) !important;
+  }
+  .tr-exceeded .visitor-name-cell .fw-semibold {
+    color: var(--danger) !important;
+  }
+  .tr-exceeded .timer-exceeded {
+    color: var(--danger) !important;
+  }
+  .badge-exceeded {
+    font-size: 0.55rem;
+    background: var(--danger);
+    color: #fff;
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-weight: 600;
+    animation: blink-exceeded 1s infinite;
+    white-space: nowrap;
+  }
+  @keyframes blink-exceeded {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.4; }
+  }
+</style>
+
 <div class="px-3 px-md-4 pt-2">
 
   {# ── STATUS GERAL ──────────────────────────────────────────────── #}
@@ -101,7 +131,7 @@
               </thead>
               <tbody>
                 {% for v in open_visits|sort(attribute='check_in') %}
-                <tr>
+                <tr data-checkin="{{ v.check_in.isoformat() }}">
                   <td>
                     <div class="photo-box" style="width:32px;height:32px;border-radius:6px;">
                       {% if v.visitor.photo_data %}
@@ -114,7 +144,7 @@
                       {% endif %}
                     </div>
                   </td>
-                  <td>
+                  <td class="visitor-name-cell">
                     <div class="fw-semibold small">{{ v.visitor.name }}</div>
                     <div class="muted" style="font-size:.65rem;">{{ v.visitor.cpf }}</div>
                   </td>
@@ -129,7 +159,12 @@
                   <td class="text-end">
                     <form method="post"
                           action="{{ url_for('visitor.checkout', visit_id=v.id) }}"
-                          onsubmit="return confirmAction(event, 'Confirma a saída de {{ v.visitor.name }}?')">
+                          class="checkout-form"
+                          data-visit-id="{{ v.id }}"
+                          data-visitor-name="{{ v.visitor.name }}"
+                          data-checkin="{{ v.check_in.isoformat() }}"
+                          onsubmit="return handleCheckout(event, this)">
+                      <input type="hidden" name="checkout_time" value="">
                       <button type="submit" class="btn btn-sm"
                               style="background:var(--gold);color:#fff;border-color:var(--gold);font-size:.68rem;">
                         <i class="bi bi-box-arrow-right me-1"></i>Saída
@@ -155,10 +190,16 @@
     </div>
   </div>
 </div>
+
+{# ── Modal de Checkout com Tempo Excedido ────────────────────────── #}
+{% include 'components/checkout_time_modal.html' %}
 {% endblock %}
 
 {% block scripts %}
 <script>
+  /* ═════════════════════════════════════════════════════════════════
+     Utilitários
+     ═════════════════════════════════════════════════════════════════ */
   function pad2(n){ return String(n).padStart(2,"0"); }
   function fmtDuration(ms){
     ms=Math.max(0,ms);
@@ -166,6 +207,10 @@
           m=Math.floor((t%3600)/60), s=t%60;
     return `${pad2(h)}:${pad2(m)}:${pad2(s)}`;
   }
+
+  /* ═════════════════════════════════════════════════════════════════
+     Timer
+     ═════════════════════════════════════════════════════════════════ */
   function tickTimers(){
     const now=Date.now();
     document.querySelectorAll('[data-timer="1"]').forEach(el=>{
@@ -175,5 +220,87 @@
     });
   }
   tickTimers(); setInterval(tickTimers,1000);
+
+  /* ═════════════════════════════════════════════════════════════════
+     Tempo excedido
+     ═════════════════════════════════════════════════════════════════ */
+  function isTimeExceeded(checkinISO) {
+    const checkin = new Date(checkinISO);
+    const now = new Date();
+    if (checkin.toDateString() !== now.toDateString()) return true;
+    return now.getHours() >= 16;
+  }
+
+  function formatDateTimeLocal(date, hours, minutes) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    const h = String(hours).padStart(2, '0');
+    const min = String(minutes).padStart(2, '0');
+    return `${y}-${m}-${d}T${h}:${min}`;
+  }
+
+  function updateExceededStatus() {
+    document.querySelectorAll('tr[data-checkin]').forEach(row => {
+      const exceeded = isTimeExceeded(row.dataset.checkin);
+      if (exceeded) {
+        row.classList.add('tr-exceeded');
+        const timerEl = row.querySelector('[data-timer]');
+        if (timerEl) timerEl.classList.add('timer-exceeded');
+        const nameCell = row.querySelector('.visitor-name-cell');
+        if (nameCell && !nameCell.querySelector('.badge-exceeded')) {
+          const badge = document.createElement('span');
+          badge.className = 'badge-exceeded ms-1';
+          badge.textContent = 'Tempo excedido';
+          nameCell.querySelector('.fw-semibold').appendChild(badge);
+        }
+      }
+    });
+  }
+
+  /* ═════════════════════════════════════════════════════════════════
+     Checkout
+     ═════════════════════════════════════════════════════════════════ */
+  let pendingCheckoutForm = null;
+
+  function handleCheckout(event, form) {
+    if (isTimeExceeded(form.dataset.checkin)) {
+      event.preventDefault();
+      pendingCheckoutForm = form;
+      const checkinDate = new Date(form.dataset.checkin);
+      document.getElementById('checkoutTimeInput').value =
+        formatDateTimeLocal(checkinDate, 16, 0);
+      document.getElementById('checkoutTimeModalName').textContent =
+        form.dataset.visitorName;
+      new bootstrap.Modal(document.getElementById('checkoutTimeModal')).show();
+      return false;
+    }
+    return confirmAction(event,
+      `Confirma a saída de ${form.dataset.visitorName}?`
+    );
+  }
+
+  document.addEventListener('DOMContentLoaded', function() {
+    const okBtn = document.getElementById('checkoutTimeModalOk');
+    if (okBtn) {
+      okBtn.addEventListener('click', function() {
+        if (pendingCheckoutForm) {
+          pendingCheckoutForm.querySelector('input[name="checkout_time"]').value =
+            document.getElementById('checkoutTimeInput').value;
+          pendingCheckoutForm.submit();
+          pendingCheckoutForm = null;
+        }
+        bootstrap.Modal.getInstance(
+          document.getElementById('checkoutTimeModal')
+        ).hide();
+      });
+    }
+  });
+
+  /* ═════════════════════════════════════════════════════════════════
+     Inicialização
+     ═════════════════════════════════════════════════════════════════ */
+  updateExceededStatus();
+  setInterval(updateExceededStatus, 60000);
 </script>
 {% endblock %}

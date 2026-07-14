@@ -1,0 +1,46 @@
+{# ═══════════════════════════════════════════════════════════════
+   Modal de Check-out com Tempo Excedido
+   Uso: {% include 'components/checkout_time_modal.html' %}
+   ═══════════════════════════════════════════════════════════════ #}
+<div class="modal fade" id="checkoutTimeModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow" style="border-radius:10px;">
+
+      <div class="modal-header border-0 pb-0">
+        <h6 class="modal-title fw-bold" style="font-size:.85rem;">
+          <i class="bi bi-clock-history me-2" style="color:var(--danger);"></i>
+          Tempo Excedido — Check-out
+        </h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body px-4 pt-2 pb-3">
+        <p class="text-muted mb-3" style="font-size:.75rem;">
+          O visitante <strong id="checkoutTimeModalName">---</strong> ultrapassou o
+          horário de expediente (16:00). Informe o horário real de saída:
+        </p>
+        <div class="mb-2">
+          <label class="form-label small fw-semibold">Horário de saída</label>
+          <input type="datetime-local" id="checkoutTimeInput"
+                 class="form-control form-control-sm" style="font-size:.8rem;">
+        </div>
+        <div class="form-text" style="font-size:.68rem;">
+          <i class="bi bi-info-circle me-1"></i>Padrão: 16:00 do dia da entrada.
+        </div>
+      </div>
+
+      <div class="modal-footer border-0 justify-content-center gap-2 px-4 pb-4 pt-0">
+        <button type="button" class="btn btn-outline-secondary btn-sm px-3"
+                data-bs-dismiss="modal">
+          Cancelar
+        </button>
+        <button type="button" class="btn btn-sm px-3 text-white"
+                id="checkoutTimeModalOk"
+                style="background:var(--danger);border-color:var(--danger);">
+          <i class="bi bi-check-lg me-1"></i>Confirmar saída
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>

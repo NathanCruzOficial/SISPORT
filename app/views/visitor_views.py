@@ -347,13 +347,19 @@ def checkin_form(visitor_id: int):
 def checkout(visit_id: int):
     """
     Registra a saída (check-out) de uma visita em aberto.
+    Aceita checkout_time opcional via POST (formato ISO).
     """
     try:
-        checkout_visit(visit_id)
+        checkout_time_str = request.form.get("checkout_time", "").strip()
+        checkout_time = None
+        if checkout_time_str:
+            checkout_time = datetime.fromisoformat(checkout_time_str)
+        checkout_visit(visit_id, checkout_time)
         flash("Saída registrada.", "success")
     except Exception as e:
         flash(str(e), "danger")
     return redirect(url_for("visitor.open_visits"))
+
 
 
 # =====================================================================
