@@ -107,14 +107,6 @@ def create_app() -> Flask:
             app_name=APP_NAME,
         )
 
-    @app.context_processor
-    def inject_photo_url():
-        def photo_url(source, record_id):
-            return (
-                url_for("visitor.serve_photo", source=source, record_id=str(record_id))
-                + f"?t={int(time())}"
-            )
-        return {"photo_url": photo_url}
     
     @app.context_processor
     def inject_open_count():
@@ -133,6 +125,14 @@ def create_app() -> Flask:
     @app.route('/icone.ico')
     def favicon():
         return send_from_directory(app.root_path, 'icone.ico', mimetype='image/x-icon')
+    
+    def photo_url(source, record_id):
+        return (
+            url_for("visitor.serve_photo", source=source, record_id=str(record_id))
+            + f"?t={int(time())}"
+        )
+
+    app.jinja_env.globals["photo_url"] = photo_url
 
     # Importa todos os models para que SQLAlchemy/Alembic conheçam
     # as tabelas durante geração/aplicação das migrations.
