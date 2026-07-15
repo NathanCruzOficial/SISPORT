@@ -9,11 +9,12 @@
 # ─────────────────────────────────────────────────────────────────────
 # Imports
 # ─────────────────────────────────────────────────────────────────────
-from flask import Flask, request, send_from_directory
+from flask import Flask, request, send_from_directory, url_for
 from .config import Config
 from .extensions import db, migrate
 from app.paths import ensure_app_dirs
 from app.version import __version__, APP_NAME
+from time import time
 
 
 # =====================================================================
@@ -95,8 +96,9 @@ def create_app() -> Flask:
     # Registra blueprints
     from .views.visitor_views import visitor_bp
     from .views.admin_settings import admin_bp
-    app.register_blueprint(visitor_bp)
+    app.register_blueprint(visitor_bp, url_prefix="/")
     app.register_blueprint(admin_bp)
+
 
     @app.context_processor
     def inject_globals():
@@ -105,6 +107,15 @@ def create_app() -> Flask:
             app_name=APP_NAME,
         )
 
+    @app.context_processor
+    def inject_photo_url():
+        def photo_url(source, record_id):
+            return (
+                url_for("visitor.serve_photo", source=source, record_id=str(record_id))
+                + f"?t={int(time())}"
+            )
+        return {"photo_url": photo_url}
+    
     @app.context_processor
     def inject_open_count():
         from .models.visitor import Visit
