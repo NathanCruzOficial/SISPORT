@@ -26,6 +26,14 @@ from app.paths import UPDATE_DIR
 log = logging.getLogger("sisport.updater")
 
 
+class UpdateCancelled(RuntimeError):
+    """Download interrompido pelo usuário via botão Cancelar."""
+
+
+class DownloadFailedOffline(RuntimeError):
+    """Todas as tentativas de download falharam — o app segue offline."""
+
+
 # =====================================================================
 # Funções — Verificação de Integridade
 # =====================================================================
@@ -173,28 +181,95 @@ def _pick_installer_asset(release_json: dict) -> dict:
     )
 
 
+def _cleanup_old_installers(keep: str | None = None) -> None:
+    """
+    Remove instaladores antigos do diretório de updates, mantendo
+    somente o instalador da versão atual (se informado).
+
+    :param keep: (str|None) Nome do arquivo que deve ser preservado.
+    :return: None.
+    """
+    if not UPDATE_DIR.exists():
+        return
+
+    for entry in UPDATE_DIR.iterdir():
+        try:
+            if not entry.is_file():
+                continue
+            if entry.name.lower().endswith(".exe"):
+                if keep and entry.name.lower() == keep.lower():
+                    continue
+                entry.unlink(missing_ok=True)
+                log.info("Instalador antigo removido: %s", entry.name)
+        except OSError as e:
+            log.warning(
+                "Falha ao remover instalador antigo %s: %s", entry.name, e
+            )
+
+
 # =====================================================================
 # Funções — Download com Progresso Visual
 # =====================================================================
 
+def _update_reconnect_status(progress: ProgressWindow) -> None:
+    """
+    Coloca a janela de progresso em modo "reconectando" durante uma
+    queda de conexão. A barra volta ao looping (indeterminada), para
+    não parecer que o download congelou.
+    """
+    try:
+        if progress is not None:
+            if hasattr(progress, "set_indeterminate"):
+                progress.set_indeterminate(
+                    "Conexão interrompida. Tentando restabelecer conexão..."
+                )
+            elif hasattr(progress, "update_status"):
+                progress.update_status(
+                    "Conexão interrompida. Tentando restabelecer conexão..."
+                )
+    except Exception:
+        pass
+
+
 def _download_with_progress(
-    url: str, filename: str, progress: ProgressWindow, max_retries: int = 3
+    url: str,
+    filename: str,
+    progress: ProgressWindow,
+    reconnect_timeout: int = 60,
+    retry_interval: int = 2,
 ) -> str:
     """
-    Baixa o instalador exibindo progresso visual em tempo real,
-    com suporte a retentativas automáticas em caso de falha.
+    Baixa o instalador exibindo progresso visual em tempo real.
 
-    :param url:         (str) URL de download do asset.
-    :param filename:    (str) Nome do arquivo de destino.
-    :param progress:    (ProgressWindow) Janela de progresso ativa.
-    :param max_retries: (int) Número máximo de tentativas (padrão: 3).
+    - Cancelamento pelo usuário → UpdateCancelled (intencional, sem erro).
+    - Queda de conexão → tenta restabelecer a cada 2s por até 60s.
+    - Se a conexão não voltar → DownloadFailedOffline.
+
+    :param url:               (str) URL de download do asset.
+    :param filename:          (str) Nome do arquivo de destino.
+    :param progress:          (ProgressWindow) Janela de progresso ativa.
+    :param reconnect_timeout: (int) Tempo total de reconexão em segundos.
+    :param retry_interval:    (int) Intervalo entre tentativas de reconexão.
     :return: (str) Caminho absoluto do arquivo baixado.
-    :raises RuntimeError: Se todas as tentativas falharem.
+    :raises UpdateCancelled: Se o usuário cancelar.
+    :raises DownloadFailedOffline: Se a conexão não retornar a tempo.
     """
     UPDATE_DIR.mkdir(parents=True, exist_ok=True)
     file_path = UPDATE_DIR / filename
 
-    for attempt in range(1, max_retries + 1):
+    if progress is not None and hasattr(progress, "reset_cancel"):
+        progress.reset_cancel()
+    if progress is not None and hasattr(progress, "set_cancel_visible"):
+        progress.set_cancel_visible(True)
+
+    reconnect_deadline = time.monotonic() + reconnect_timeout
+
+    while True:
+        # Respeita cancelamento também entre tentativas.
+        if progress is not None and hasattr(progress, "is_cancelled"):
+            if progress.is_cancelled():
+                raise UpdateCancelled("Download cancelado pelo usuário.")
+
         try:
             if file_path.exists():
                 file_path.unlink()
@@ -210,6 +285,12 @@ def _download_with_progress(
                     for chunk in r.iter_content(chunk_size=chunk_size):
                         if not chunk:
                             continue
+
+                        if progress is not None and hasattr(progress, "is_cancelled"):
+                            if progress.is_cancelled():
+                                raise UpdateCancelled(
+                                    "Download cancelado pelo usuário."
+                                )
 
                         f.write(chunk)
                         downloaded += len(chunk)
@@ -233,22 +314,42 @@ def _download_with_progress(
             if total > 0 and file_path.stat().st_size != total:
                 raise RuntimeError("Download incompleto — tamanho não confere.")
 
+            if progress is not None and hasattr(progress, "set_cancel_visible"):
+                progress.set_cancel_visible(False)
+
             log.info(f"Download concluído: {file_path}")
             return str(file_path)
 
-        except Exception as e:
-            log.warning(f"Tentativa {attempt}/{max_retries} falhou: {e}")
+        except UpdateCancelled:
+            raise
 
-            if attempt < max_retries:
-                wait = attempt * 2  # backoff: 2s, 4s, 6s
-                progress.update_status(
-                    f"Falha no download. Tentando novamente em {wait}s..."
+        except Exception as e:
+            log.warning("Falha de conexão durante o download: %s", e)
+
+            # Esgotou o tempo de reconexão → erro definitivo de conexão.
+            if time.monotonic() >= reconnect_deadline:
+                raise DownloadFailedOffline(
+                    "Conexão com o servidor não restabelecida após 1 minuto."
                 )
-                time.sleep(wait)
-            else:
-                raise RuntimeError(
-                    f"Download falhou após {max_retries} tentativas: {e}"
+
+            # Barra volta ao looping indicando que o sistema está tentando
+            # resolver sozinho, sem parecer travado.
+            _update_reconnect_status(progress)
+
+            # Aguarda o intervalo antes de tentar restabelecer.
+            time.sleep(retry_interval)
+
+            if progress is not None and hasattr(progress, "is_cancelled"):
+                if progress.is_cancelled():
+                    raise UpdateCancelled("Download cancelado pelo usuário.")
+
+            if time.monotonic() >= reconnect_deadline:
+                raise DownloadFailedOffline(
+                    "Conexão com o servidor não restabelecida após 1 minuto."
                 )
+
+            # Volta ao início do laço e tenta novamente.
+            continue
 
 
 # =====================================================================
@@ -256,7 +357,10 @@ def _download_with_progress(
 # =====================================================================
 
 def check_and_offer_update(
-    current_version: str, repo_id: int, app_name: str
+    current_version: str,
+    repo_id: int,
+    app_name: str,
+    progress_window=None,
 ) -> None:
     """
     Verifica se há uma versão mais recente no GitHub e oferece
@@ -264,107 +368,101 @@ def check_and_offer_update(
 
     Comportamento por tipo de release:
         - Release estável (prerelease=False) → OBRIGATÓRIA.
-          O usuário é informado e a atualização prossegue sem opção
-          de recusa. O aplicativo não inicia até que a atualização
-          seja concluída.
+          Inicia o download automaticamente, sem perguntar. A janela
+          não pode ser fechada manualmente (somente encerrando o
+          processo).
         - Pre-release (prerelease=True) → OPCIONAL.
           O usuário pode aceitar ou recusar via diálogo Sim/Não.
 
-    Segurança:
-        - Verifica integridade do instalador via SHA-256 (se publicado).
-        - Retry automático com backoff em caso de falha no download.
-        - Arquivo corrompido/adulterado é removido e a atualização é abortada.
-
-    Fluxo:
-        1. Consulta as releases mais recentes via API do GitHub (por ID).
-        2. Seleciona a melhor release disponível (estável > pre-release).
-        3. Exibe diálogo adequado (obrigatório ou opcional).
-        4. Abre janela de progresso visual.
-        5. Baixa o instalador com barra de progresso e retry.
-        6. Verifica integridade SHA-256 (se hash disponível).
-        7. Executa o instalador e encerra a aplicação.
+    Caso não haja conexão/erro de rede, a atualização é ignorada
+    silenciosamente e o app continua normalmente.
 
     :param current_version: (str) Versão atualmente instalada (ex: '1.2.0').
     :param repo_id:         (int) ID numérico do repositório no GitHub.
     :param app_name:        (str) Nome da aplicação para exibir nos diálogos.
+    :param progress_window: (ProgressWindow|LoadingWindow|None) Janela já
+        existente (splash) a ser reutilizada. Se None, uma ProgressWindow
+        própria será criada.
     :return: None.
     """
-    progress = None
-    mandatory = False  # valor padrão seguro para o bloco except
+    progress = progress_window
+    mandatory = False
 
+    # ── Consulta GitHub (offline/erro de rede seguem normalmente) ──
     try:
-        # ── Consulta GitHub ──
         log.info("Verificando atualizações no GitHub...")
         releases = _get_latest_releases(repo_id)
+    except (requests.RequestException, OSError) as e:
+        log.warning(f"Falha de rede ao verificar atualizações: {e}")
+        if progress is not None:
+            try:
+                progress.update_status("Sem conexão — continuando...")
+                progress.update()
+            except Exception:
+                pass
+        return
 
-        if not releases:
-            log.info("Nenhuma release encontrada no repositório.")
-            return
+    if not releases:
+        log.info("Nenhuma release encontrada no repositório.")
+        return
 
-        # ── Seleciona a melhor release ──
-        rel, mandatory = _find_best_release(releases, current_version)
+    # ── Seleciona a melhor release ──
+    rel, mandatory = _find_best_release(releases, current_version)
 
-        if rel is None:
-            log.info("Aplicação já está na versão mais recente.")
-            return
+    if rel is None:
+        log.info("Aplicação já está na versão mais recente.")
+        return
 
-        latest = (rel.get("tag_name") or "").lstrip("v").strip()
-        release_type = "OBRIGATÓRIA" if mandatory else "opcional"
-        log.info(
-            f"Versão atual: {current_version} | "
-            f"Disponível: {latest} ({release_type})"
+    latest = (rel.get("tag_name") or "").lstrip("v").strip()
+    release_type = "OBRIGATÓRIA" if mandatory else "opcional"
+    log.info(
+        f"Versão atual: {current_version} | "
+        f"Disponível: {latest} ({release_type})"
+    )
+
+    # ── Atualização obrigatória: sem pergunta ──
+    if mandatory:
+        log.info("Atualização obrigatória — iniciando automaticamente.")
+        if progress is not None:
+            progress.set_indeterminate(
+                "Atualização obrigatória encontrada! Preparando download..."
+            )
+    else:
+        accepted = ask_yes_no(
+            f"{app_name} — Nova atualização disponível",
+            "Encontramos uma nova versão (versão de testes) para você.\n\n"
+            "Deseja baixar e instalar agora?\n"
+            "Se preferir, pode continuar usando a versão atual.",
         )
 
-        # ── Diálogo ao usuário ──
-                # ── Diálogo ao usuário ──
-        if mandatory:
-            accepted = ask_yes_no(
-                f"{app_name} — Atualização Obrigatória",
-                f"Uma atualização obrigatória está disponível.\n\n"
-                f"  Versão instalada:   {current_version}\n"
-                f"  Versão disponível:  {latest}\n\n"
-                "O aplicativo não pode continuar sem esta atualização.\n\n"
-                "Deseja atualizar agora?",
-            )
+        if not accepted:
+            log.info("Usuário recusou a atualização opcional.")
+            return
 
-            if not accepted:
-                log.info(
-                    "Usuário recusou atualização obrigatória — "
-                    "encerrando aplicação."
-                )
-                sys.exit(0)
-        else:
-            accepted = ask_yes_no(
-                f"{app_name} — Atualização Disponível",
-                f"Uma nova versão (pré-release) do {app_name} "
-                f"está disponível!\n\n"
-                f"  Versão instalada:   {current_version}\n"
-                f"  Versão disponível:  {latest}\n\n"
-                "Esta é uma versão de teste. Deseja atualizar agora?",
-            )
+    # ── Localiza o instalador e hash ──
+    asset = _pick_installer_asset(rel)
+    installer_url = asset["browser_download_url"]
+    file_name = asset["name"]
+    expected_hash = _extract_sha256_from_body(rel.get("body", ""))
 
-            if not accepted:
-                log.info("Usuário recusou a atualização opcional.")
-                return
+    if expected_hash:
+        log.info(f"Hash SHA-256 encontrado na release: {expected_hash[:16]}...")
+    else:
+        log.warning("Nenhum hash SHA-256 publicado na release.")
 
-
-        # ── Localiza o instalador e hash ──
-        asset = _pick_installer_asset(rel)
-        installer_url = asset["browser_download_url"]
-        file_name = asset["name"]
-        expected_hash = _extract_sha256_from_body(rel.get("body", ""))
-
-        if expected_hash:
-            log.info(f"Hash SHA-256 encontrado na release: {expected_hash[:16]}...")
-        else:
-            log.warning("Nenhum hash SHA-256 publicado na release.")
-
-        # ── Abre janela de progresso ──
+    # ── Reutiliza splash ou cria uma ProgressWindow ──
+    if progress is None:
         progress = ProgressWindow(f"{app_name} — Atualizando")
         progress.show()
         progress.update_progress(0, "Preparando download...")
+    else:
+        if hasattr(progress, "set_closable"):
+            progress.set_closable(False)
+        progress.update_progress(0, "Preparando download...")
 
-        time.sleep(0.5)
+    try:
+        # ── Remove instaladores de versões anteriores ──
+        _cleanup_old_installers()
 
         # ── Download com progresso e retry ──
         installer_path = _download_with_progress(
@@ -384,30 +482,98 @@ def check_and_offer_update(
                     "O download foi removido por segurança."
                 )
 
-        # ── Instalação ──
-        progress.update_progress(100, "Download concluído e verificado!")
+        # ── Instalação silenciosa ──
+        progress.update_progress(100, "Download concluído! Instalando...")
         time.sleep(0.5)
 
-        progress.set_indeterminate("Iniciando instalação...")
-        time.sleep(1)
+        log.info("Executando instalador silencioso: %s", installer_path)
+        subprocess.Popen(
+            [
+                installer_path,
+                "/VERYSILENT",        # sem wizard, sem janelas
+                "/SUPPRESSMSGBOXES",  # suprime qualquer MessageBox
+                "/NORESTART",         # nunca reinicia o Windows
+            ],
+            shell=False,
+        )
 
-        log.info(f"Executando instalador: {installer_path}")
-        subprocess.Popen([installer_path], shell=False)
-
-        progress.update_status("Instalador iniciado! Fechando o aplicativo...")
-        time.sleep(1.5)
-
+        # Fecha imediatamente para liberar o executável. A reabertura
+        # do app fica a cargo do [Run] no script Inno Setup.
         progress.close()
         sys.exit(0)
+
+    except UpdateCancelled:
+        log.info("Download cancelado pelo usuário.")
+        if progress is not None:
+            try:
+                progress.set_status("Cancelando operação...")
+                progress.set_cancel_visible(False)
+            except Exception:
+                pass
+
+        time.sleep(0.5)
+
+        if mandatory:
+            if progress is not None:
+                progress.close()
+            sys.exit(1)
+
+        # Opcional: cancelamento intencional — segue normalmente, sem erro.
+        return
+
+    except DownloadFailedOffline:
+        log.warning("Falha de conexão persistente — sem comunicação com o servidor.")
+
+        if progress is not None:
+            try:
+                progress.set_cancel_visible(False)
+            except Exception:
+                pass
+
+        if mandatory:
+            show_error(
+                f"{app_name} — Erro de Conexão",
+                "Não foi possível conectar ao servidor de atualizações.\n"
+                "Verifique sua conexão com a internet.\n\n"
+                "O aplicativo será encerrado por segurança.",
+            )
+            if progress is not None:
+                progress.close()
+            sys.exit(1)
+
+        # Atualização opcional: informa e segue em modo offline.
+        show_error(
+            f"{app_name} — Erro de Conexão",
+            "Não foi possível conectar ao servidor de atualizações.\n"
+            "O aplicativo continuará normalmente em modo offline.",
+        )
+
+        if progress is not None:
+            try:
+                if progress is progress_window:
+                    progress.set_closable(True)
+                progress.set_indeterminate("Sem conexão — continuando offline...")
+            except Exception:
+                pass
+        return
 
     except Exception as e:
         log.error(f"Erro durante atualização: {e}", exc_info=True)
 
-        if progress:
-            progress.close()
+        # Se a janela era o splash compartilhado e a atualização era
+        # opcional, mantém o splash aberto para o app continuar.
+        if progress is not None and progress is progress_window and not mandatory:
+            try:
+                progress.set_closable(True)
+                progress.set_indeterminate("Falha na atualização — continuando...")
+            except Exception:
+                pass
+        else:
+            if progress is not None:
+                progress.close()
 
         error_msg = (
-            f"Não foi possível verificar por atualizações.\n\n"
+            f"Não foi possível concluir a atualização.\n\n"
             f"Erro: {e}\n\n"
         )
 

@@ -12,8 +12,7 @@
 #   • --browser (CLI flag) ... idem, força modo browser
 #
 # Build (PyInstaller):
-#   pyinstaller --noconsole --onefile main.py... (ou main.spec)
-#   (O console é SEMPRE oculto; quando necessário, alocamos via Win32)
+#   pyinstaller package/sisport.spec
 # =====================================================================
 
 # =====================================================================
@@ -31,6 +30,8 @@ from datetime import datetime
 from pathlib import Path
 
 from app.paths import APP_DIR, ensure_app_dirs, log_path, icon_path, migrations_path
+from app.version import APP_NAME, __version__, GITHUB_REPO_ID
+from app.loading import LoadingWindow
 
 
 # =====================================================================
@@ -89,21 +90,17 @@ PORT = 5000
 # Variáveis Globais — Banco de Dados / Migrations
 # =====================================================================
 
-# Se você já tem usuários com bancos criados antes do Alembic,
-# gere primeiro uma migration "baseline schema".
-#
-# Depois de gerar essa migration, você pode colocar aqui o ID dela.
-#
-# Exemplo:
-#   LEGACY_BASELINE_REVISION = "a1b2c3d4e5f6"
-#
-# Se ficar como None, bancos legados serão marcados como "head".
-# Isso é aceitável somente na primeira versão com migrations.
-#
-# RECOMENDAÇÃO:
-# Depois que você criar novas migrations além da baseline, preencha
-# esta constante com o ID da migration baseline.
 LEGACY_BASELINE_REVISION = "71cb9dafd972"
+
+
+# =====================================================================
+# Caminho da Logo do Splash
+# =====================================================================
+
+# Em ambiente de desenvolvimento usa a raiz do projeto; no executável
+# PyInstaller usa o diretório temporário _MEIPASS (arquivos empacotados).
+BASE_DIR = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
+LOGO_PATH = BASE_DIR / "app" / "static" / "img" / "icone.ico"
 
 
 # =====================================================================
@@ -432,7 +429,9 @@ def atualizar_banco(app):
 # Funções — Servidor Flask (Thread e Polling)
 # =====================================================================
 
-def _wait_for_server(host: str, port: int, timeout: float = 60.0) -> bool:
+def _wait_for_server(
+    host: str, port: int, timeout: float = 60.0, on_tick=None
+) -> bool:
     """
     Aguarda o servidor Flask ficar pronto fazendo polling via conexão
     TCP. Mais confiável que um sleep fixo.
@@ -440,6 +439,8 @@ def _wait_for_server(host: str, port: int, timeout: float = 60.0) -> bool:
     :param host:    (str)   Endereço do servidor.
     :param port:    (int)   Porta do servidor.
     :param timeout: (float) Tempo máximo de espera em segundos.
+    :param on_tick: (callable|None) Função chamada a cada iteração,
+                     usada para manter a animação do splash viva.
     :return: (bool) True se o servidor respondeu, False se deu timeout.
     """
     import socket
@@ -452,6 +453,8 @@ def _wait_for_server(host: str, port: int, timeout: float = 60.0) -> bool:
                 return True
         except OSError:
             time.sleep(0.15)
+            if on_tick:
+                on_tick()
 
     return False
 
@@ -502,26 +505,39 @@ def _start_server_thread() -> threading.Thread:
 # Funções — Modos de Execução (Webview / Browser)
 # =====================================================================
 
-def _run_webview_mode():
+def _run_webview_mode(loading: LoadingWindow | None = None):
     """
     Modo padrão: inicia o servidor Flask em thread e abre a aplicação
     em uma janela nativa via pywebview (fullscreen, redimensionável).
     Encerra a aplicação quando a janela é fechada.
 
+    :param loading: (LoadingWindow|None) Splash a ser fechado antes da janela.
     :return: None. Encerra o processo ao fechar a janela.
     """
     import webview
-    from app.version import APP_NAME
 
     log.info("Modo: Webview (janela nativa)")
 
     _start_server_thread()
 
-    if not _wait_for_server(HOST, PORT):
+    if loading:
+        loading.set_status("Iniciando servidor...")
+        loading.update()
+
+    if not _wait_for_server(
+        HOST, PORT, on_tick=(loading.update if loading else None)
+    ):
         log.error("Servidor não respondeu a tempo. Abortando.")
+        if loading:
+            loading.close()
         sys.exit(1)
 
     log.info("Servidor pronto. Abrindo janela Webview.")
+
+    if loading:
+        loading.set_status("Abrindo aplicação...")
+        loading.update()
+        loading.close()
 
     webview.create_window(
         APP_NAME,
@@ -532,23 +548,20 @@ def _run_webview_mode():
         fullscreen=True,
     )
 
-    webview.start(
-        icon=icon_path(),
-    )
+    webview.start(icon=icon_path())
 
     log.info("Janela Webview fechada. Encerrando.")
 
 
-def _run_browser_mode():
+def _run_browser_mode(loading: LoadingWindow | None = None):
     """
     Modo browser: aloca console Win32, inicia o servidor Flask em thread,
     abre o navegador padrão do sistema e mantém o processo vivo até
     Ctrl+C ou fechamento do console.
 
+    :param loading: (LoadingWindow|None) Splash a ser fechado antes do navegador.
     :return: None. Encerra via KeyboardInterrupt ou fechamento da janela.
     """
-    from app.version import APP_NAME, __version__
-
     _alloc_console()
     _add_console_log_handler()
 
@@ -561,12 +574,26 @@ def _run_browser_mode():
 
     _start_server_thread()
 
-    if not _wait_for_server(HOST, PORT):
+    if loading:
+        loading.set_status("Iniciando servidor...")
+        loading.update()
+
+    if not _wait_for_server(
+        HOST, PORT, on_tick=(loading.update if loading else None)
+    ):
         log.error("Servidor não respondeu a tempo. Abortando.")
+        if loading:
+            loading.close()
         input("Pressione ENTER para fechar...")
         sys.exit(1)
 
     log.info("Servidor pronto. Abrindo navegador...")
+
+    if loading:
+        loading.set_status("Abrindo navegador...")
+        loading.update()
+        loading.close()
+
     webbrowser.open(f"http://{HOST}:{PORT}/")
 
     log.info("Pressione Ctrl+C ou feche esta janela para encerrar.")
@@ -582,19 +609,25 @@ def _run_browser_mode():
 # Funções — Atualização Automática (Updater)
 # =====================================================================
 
-def _check_update():
+def _check_update(loading: LoadingWindow | None = None):
     """
     Verifica se há atualizações disponíveis no repositório GitHub.
-    Silencia erros para não travar a inicialização da aplicação.
+    Erros de rede/offline são silenciados para não travar a inicialização.
 
+    :param loading: (LoadingWindow|None) Splash a ser reutilizado no update.
     :return: None.
     """
     try:
         from app.updater import check_and_offer_update
-        from app.version import __version__, APP_NAME, GITHUB_REPO_ID
+
+        if loading:
+            loading.set_status("Verificando atualizações...")
+            loading.update()
 
         log.info("Verificando atualizações...")
-        check_and_offer_update(__version__, GITHUB_REPO_ID, APP_NAME)
+        check_and_offer_update(
+            __version__, GITHUB_REPO_ID, APP_NAME, progress_window=loading
+        )
     except Exception as e:
         log.warning(f"Falha ao verificar atualização: {e}")
 
@@ -605,15 +638,27 @@ def _check_update():
 
 def main():
     """
-    Ponto de entrada principal da aplicação. Detecta o modo de execução
-    (Webview ou Browser), verifica atualizações e delega para o modo
-    correspondente.
+    Ponto de entrada principal da aplicação. Cria o splash, detecta o
+    modo de execução (Webview ou Browser), verifica atualizações e
+    delega para o modo correspondente.
 
     :return: None.
     """
     log.info("Iniciando Sisport...")
     log.info(f"Dados em: {APP_DIR}")
     log.info(f"Log em:   {LOG_FILE}")
+
+    loading = LoadingWindow(
+        title=APP_NAME,
+        image_path=str(LOGO_PATH),
+        version=__version__,
+        width=520,
+        height=340,
+    )
+    loading.show()                       # ← INICIA A JANELA
+    loading.set_status("Inicializando...")
+
+    loading.set_status("Verificando ambiente...")
 
     # Garante instância única.
     _mutex = _ensure_single_instance()
@@ -625,12 +670,13 @@ def main():
     else:
         log.info("Modo padrão → Webview.")
 
-    _check_update()
+    _check_update(loading)
 
     if browser_mode:
-        _run_browser_mode()
+        _run_browser_mode(loading)
     else:
-        _run_webview_mode()
+        _run_webview_mode(loading)
+
 
 
 if __name__ == "__main__":
