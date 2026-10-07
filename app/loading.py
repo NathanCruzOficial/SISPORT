@@ -21,7 +21,7 @@ except ImportError:
 
 
 class LoadingWindow:
-    """Splash centralizado, sem bordas, sempre no topo."""
+    """Splash centralizado, sem bordas, abaixo das janelas de diálogo."""
 
     def __init__(
         self,
@@ -85,20 +85,43 @@ class LoadingWindow:
         self._ready.wait(timeout=5)
 
     def _run_tk(self):
-        self._root = tk.Tk()
-        self._root.title(self.title)
-        self._root.overrideredirect(True)
-        self._root.attributes("-topmost", True)
-        self._center_window()
-        self._build_ui()
-        self._root.protocol("WM_DELETE_WINDOW", self._block_close)
-        self._root.after(30, self._poll_queue)
-        self._ready.set()
-        self._root.mainloop()
+        try:
+            self._root = tk.Tk()
+            self._root.title(self.title)
+
+            # Sem bordas de janela
+            self._root.overrideredirect(True)
+
+            # NÃO força ficar acima das outras janelas.
+            # Assim dialogs de erro/confirmação aparecem naturalmente na frente.
+            self._root.attributes("-topmost", False)
+
+            self._center_window()
+            self._build_ui()
+
+            # Garante que a janela seja desenhada e visível
+            self._root.deiconify()
+            self._root.update_idletasks()
+            self._root.update()
+
+            self._root.protocol("WM_DELETE_WINDOW", self._block_close)
+            self._root.after(30, self._poll_queue)
+
+            self._ready.set()
+            self._root.mainloop()
+        except Exception as e:
+            # Se o splash travar silenciosamente, pelo menos logamos.
+            print(f"[LoadingWindow] Erro ao criar splash: {e}", file=sys.stderr)
+            self._ready.set()
 
     def _block_close(self):
-        if self._closable:
-            self.close()
+        if not self._closable:
+            return
+        # Chamado de dentro da própria thread Tk (ex.: WM_CLOSE enviado pelo
+        # instalador InnoSetup). Encerra direto, sem join(), para não travar
+        # a thread nela mesma.
+        self._root.quit()
+        self._root.destroy()
 
     def _poll_queue(self):
         try:
@@ -351,8 +374,22 @@ class LoadingWindow:
         pass
 
     def close(self):
-        if self._thread and self._thread.is_alive():
-            self._queue.put(("close",))
-            self._thread.join(timeout=2)
+        if not self._thread or not self._thread.is_alive():
+            self._root = None
+            self._thread = None
+            return
+
+        if threading.current_thread() is self._thread:
+            # Chamado de dentro da thread Tk — encerra direto, sem join().
+            self._root.quit()
+            self._root.destroy()
+            return
+
+        self._queue.put(("close",))
+        self._thread.join(timeout=2)
         self._root = None
         self._thread = None
+
+    def is_alive(self) -> bool:
+        """True enquanto a janela do splash estiver aberta."""
+        return self._thread is not None and self._thread.is_alive()

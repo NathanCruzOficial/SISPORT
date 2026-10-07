@@ -483,11 +483,15 @@ def check_and_offer_update(
                 )
 
         # ── Instalação silenciosa ──
-        progress.update_progress(100, "Download concluído! Instalando...")
-        time.sleep(0.5)
+        progress.update_progress(100, "Download concluído!")
+        time.sleep(0.3)
 
-        log.info("Executando instalador silencioso: %s", installer_path)
-        subprocess.Popen(
+        # Splash continua vivo com indicador de instalação
+        progress.set_indeterminate("Instalando nova versão... Por favor, aguarde.")
+        if hasattr(progress, "set_closable"):
+            progress.set_closable(True)
+
+        proc = subprocess.Popen(
             [
                 installer_path,
                 "/VERYSILENT",        # sem wizard, sem janelas
@@ -497,10 +501,19 @@ def check_and_offer_update(
             shell=False,
         )
 
-        # Fecha imediatamente para liberar o executável. A reabertura
-        # do app fica a cargo do [Run] no script Inno Setup.
-        progress.close()
-        sys.exit(0)
+        # Aguarda: o InnoSetup (CloseApplications=yes) manda WM_CLOSE no splash
+        # quando for substituir o .exe. Nesse momento o app encerra e libera o
+        # arquivo. Se o instalador terminar sem fechar (ex.: dev), encerramos
+        # em seguida. O timeout de 120s é só rede de segurança.
+        try:
+            deadline = time.monotonic() + 120.0
+            while proc.poll() is None and time.monotonic() < deadline:
+                if hasattr(progress, "is_alive") and not progress.is_alive():
+                    sys.exit(0)
+                time.sleep(0.25)
+        finally:
+            progress.close()
+            sys.exit(0)
 
     except UpdateCancelled:
         log.info("Download cancelado pelo usuário.")
