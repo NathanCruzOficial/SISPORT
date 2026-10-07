@@ -548,7 +548,12 @@ def _run_webview_mode(loading: LoadingWindow | None = None):
         fullscreen=True,
     )
 
-    webview.start(icon=icon_path())
+    # Perfil persistente do WebView2 para lembrar permissões (câmera, etc.)
+    webview.start(
+        icon=icon_path(),
+        storage_path=str(APP_DIR / "webview_profile"),
+        private_mode=True,
+    )
 
     log.info("Janela Webview fechada. Encerrando.")
 
