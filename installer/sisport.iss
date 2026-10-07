@@ -19,6 +19,16 @@ DefaultDirName={autopf}\{#AppName}
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
 
+; ────────────────────────────────────────────────────────────────
+; Atualização silenciosa (invocada pelo updater.py com /VERYSILENT)
+; ────────────────────────────────────────────────────────────────
+; Fecha o SISPORT que está rodando antes de sobrescrever o .exe
+CloseApplications=yes
+; Não reinicia apps fechados — o [Run] abaixo reabre o SISPORT
+RestartApplications=no
+; Reutiliza a pasta da instalação anterior (essencial em updates)
+UsePreviousAppDir=yes
+
 OutputDir=.\installer_output
 OutputBaseFilename={#AppName}-v{#AppVersion}_setup
 Compression=lzma2
@@ -44,7 +54,9 @@ Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExeName}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\{#AppExeName}"; Description: "Executar {#AppName}"; Flags: nowait postinstall skipifsilent
+; Reabre o SISPORT ao final — INCLUSIVE na instalação silenciosa.
+; (removido o "skipifsilent", senão o update não reabriria o app)
+Filename: "{app}\{#AppExeName}"; Description: "Executar {#AppName}"; Flags: nowait postinstall
 
 [Code]
 var
