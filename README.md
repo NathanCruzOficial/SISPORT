@@ -1,227 +1,106 @@
-# SISPORT — Sistema de Controle de Portaria
+# SISPORT
 
-> Aplicação Windows/Web para registro e controle de visitantes, desenvolvida para o Grupamento de Unidades Escola da 9ª Brigada de Infantaria Motorizada do Exército Brasileiro.
+Sistema de controle de visitantes e registro de visitas, desenvolvido em Python com Flask e SQLAlchemy. O projeto pode ser executado localmente no Windows em uma janela de aplicativo ou no navegador.
 
----
+> **Estado da documentação:** esta página apresenta uma visão geral. A arquitetura e os fluxos estão sendo documentados a partir do código existente; os pontos ainda não verificados serão identificados como pendentes.
 
-## 🚀 Visão geral
+## Visão geral
 
-O **SISPORT** oferece um fluxo completo de controle de visitantes, do cadastro à saída, com atenção especial às necessidades de operação militar:
+O SISPORT reúne funcionalidades para identificação de visitantes, manutenção dos seus dados e registro de entradas e saídas.
 
-- **Cadastro guiado** de visitantes em 3 etapas (dados pessoais → foto via webcam → destino)
-- **Registro automático** de check-in (entrada) no momento do cadastro
-- **Check-out manual** (saída) com um clique
-- **Timer em tempo real** de permanência para visitas em aberto
-- **Relatório diário imprimível** em formato A4, com numeração de páginas, campos de conferência e vistos de autoridades
-- **Identificação por CPF** — vincula foto, histórico e dados do visitante
+Entre as funcionalidades presentes no código estão:
 
----
+- Identificação e cadastro de visitantes, incluindo validação de dados.
+- Captura, armazenamento e exibição de fotos.
+- Registro de visitas, com destino, entrada e saída.
+- Consulta de visitas e geração de relatórios para impressão.
+- Administração de categorias de visitantes, destinos e configurações.
+- Banco de dados SQLite e suporte a migrações.
+- Inicialização como aplicativo Windows ou execução pelo navegador.
+- Verificação de atualizações e rotinas de inicialização/log.
 
-## 🧱 Stack Tecnológica
+## Tecnologias
 
-| Camada       | Tecnologia                                                     |
-| ------------ | -------------------------------------------------------------- |
-| **Backend**  | Python · Flask · Jinja2                                        |
-| **Frontend** | HTML5 · Bootstrap 5 · Bootstrap Icons · JavaScript (vanilla)   |
-| **Impressão**| CSS `@page` (A4) · compatível com WeasyPrint e `window.print()`|
-| **Webcam**   | API `MediaDevices.getUserMedia` (módulo `camera.js`)           |
-| **Máscaras** | IMask.js (CPF e telefone via `mask.js`)                        |
-
----
-
-## 📁 Estrutura de Diretórios (Templates)
+| Área | Tecnologias identificadas |
+|---|---|
+| Backend | Python, Flask |
+| Persistência | SQLite, SQLAlchemy, Flask-Migrate/Alembic |
+| Interface | HTML, Jinja2, Bootstrap, CSS e JavaScript |
+| Captura de imagem | API de mídia do navegador e processamento de fotos no backend |
+| Empacotamento | PyInstaller e scripts/configuração de instalador |
+| Versionamento e automação | Git e GitHub Actions |
 
 ## Estrutura do projeto
 
 ```text
 SISPORT/
-├── main.py                    # Ponto de entrada da aplicação
 ├── app/
-│   ├── __init__.py             # Factory/configuração do Flask
-│   ├── config.py               # Configurações principais
-│   ├── extensions.py           # Extensões Flask, banco, migrate etc.
-│   ├── models/                 # Modelos SQLAlchemy
-│   ├── views/                  # Rotas Flask
-│   ├── controllers/            # Regras de fluxo da aplicação
-│   ├── services/               # Serviços auxiliares
-│   ├── templates/              # Templates HTML/Jinja
-│   ├── static/                 # CSS, JS, imagens e bibliotecas locais
-│   └── utils/                  # Funções utilitárias
-├── migrations/                 # Migrações do banco de dados
-├── package/                    # Scripts e configuração de build
-├── installer/                  # Instalador Inno Setup
-└── .github/workflows/          # Automação de release
-
-
-
-## 📄 Templates
-
-### `visitor_wizard.html`
-
-Formulário guiado em **3 etapas** para cadastro completo de um novo visitante:
-
-| Etapa | Nome           | Descrição                                                        |
-| ----- | -------------- | ---------------------------------------------------------------- |
-| **1** | Identificação  | Nome, CPF, filiação (mãe/pai), celular, e-mail, empresa         |
-| **2** | Foto           | Captura via webcam (`camera.js`) ou opção de pular               |
-| **3** | Local/Destino  | Setor/pessoa a visitar + registro automático do check-in         |
-
-**Rotas (POST):**
-
-| Rota                       | Ação                                             |
-| -------------------------- | ------------------------------------------------ |
-| `visitor.wizard_step1`     | Valida dados pessoais → avança para etapa 2      |
-| `visitor.wizard_step2`     | Salva foto (Data URL base64) → avança para etapa 3 |
-| `visitor.wizard_finish`    | Finaliza cadastro + registra check-in da visita   |
-
-**Variáveis de contexto:**
-
-wizard.step         # int  — Etapa atual (1, 2 ou 3)
-wizard.name         # str  — Nome completo
-wizard.cpf          # str  — CPF do visitante
-wizard.mom_name     # str  — Nome da mãe
-wizard.father_name  # str  — Nome do pai (opcional)
-wizard.phone        # str  — Celular
-wizard.email        # str  — E-mail (opcional)
-wizard.empresa      # str  — Vínculo empresarial (opcional)
-
-report.html
-Listagem de visitas com timer de permanência em tempo real (atualizado a cada 1 segundo via JavaScript).
-
-Reutilizado por duas views:
-
-report.html
-Listagem de visitas com timer de permanência em tempo real (atualizado a cada 1 segundo via JavaScript).
-
-Reutilizado por duas views:
-
-report.html
-Listagem de visitas com timer de permanência em tempo real (atualizado a cada 1 segundo via JavaScript).
-
-Reutilizado por duas views:
-
-Variáveis de contexto:
-
-title          # str          — Título dinâmico da página
-visits         # list[Visit]  — Lista de visitas do dia/abertas
-show_checkout  # bool         — Se True, exibe coluna "Ação"
-
-print_day.html
-Documento standalone (não herda de base.html) otimizado para impressão em A4.
-
-## Recursos de impressão:
-
-Configuração @page com margens de 12mm
-Numeração automática: "Página X de Y" no rodapé central
-Timestamp de geração no rodapé esquerdo
-Cabeçalho da tabela (<thead>) repete em cada página
-Linhas não quebram no meio (page-break-inside: avoid)
-Bloco de conferência e vistos nunca são quebrados entre páginas
-Elementos com classe .no-print são ocultados na impressão
-Estrutura do documento impresso:
-
-Cabeçalho institucional — Ministério da Defesa → EB → GUEs/9ª Bda Inf Mtz
-Metadados — Data do documento, timestamp de geração, total de visitas
-Tabela de visitas — Status, entrada, saída, tempo, nome, telefone, CPF, destino
-Conferência — Campos manuais (nome, posto/graduação, assinatura)
-Vistos — Oficial de Dia · Adjunto do Of Dia · Comandante da Guarda
-Variáveis de contexto:
-
-visits        # list[Visit]      — Lista de visitas do dia
-today         # date             — Data de referência do relatório
-generated_at  # datetime | None  — Timestamp de geração (fallback JS se None)
-
-## 🗺️ Rotas Identificadas
-
-Método,Rota (endpoint),Descrição
-GET,visitor.identify,Tela de identificação (busca por CPF)
-GET,visitor.wizard,Wizard — exibe etapa atual
-POST,visitor.wizard_step1,Processa etapa 1 (dados pessoais)
-POST,visitor.wizard_step2,Processa etapa 2 (foto webcam)
-POST,visitor.wizard_finish,Processa etapa 3 + finaliza cadastro
-GET,visitor.report_today,Relatório do dia (todas as visitas)
-GET,visitor.open_visits,Visitas em aberto (sem check-out)
-GET,visitor.report_today_print,Relatório imprimível (A4)
-POST,visitor.checkout,Registra check-out (saída) da visita
-GET,visitor.uploaded_file,Serve a foto do visitante
-
-### 🔧 Assets JavaScript
-camera.js
-Controla a webcam na etapa 2 do wizard de cadastro:
-
-Ativa/desativa stream de vídeo (getUserMedia)
-Captura snapshot do <video> → gera Data URL (base64)
-Preenche o campo hidden photo_data_url
-Habilita/desabilita botões conforme o estado da câmera
-Expõe ensurePhoto() usada no onsubmit do formulário
-
-Atributo,Elemento,Função
-"data-camera=""1""",Container,Identifica o bloco de câmera
-data-open,Button,Ativa a câmera
-data-capture,Button,Captura foto
-data-close,Button,Desativa a câmera
-data-preview,Img,Exibe prévia da foto capturada
-data-enable-on-capture,Button,Habilitado após captura
-
-mask.js
-Aplica máscaras de formatação nos campos de input via IMask:
-
-CPF: 000.000.000-00
-Telefone: (00) 0 0000-0000
-
-
-## 📊 Modelo de Dados (inferido)
-
+│   ├── controllers/   # Operações de fluxo e parte das regras da aplicação
+│   ├── models/        # Modelos e acesso a dados via SQLAlchemy
+│   ├── services/      # Serviços auxiliares, como fotos e relatórios
+│   ├── views/         # Rotas Flask e preparação de respostas
+│   ├── templates/     # Páginas e componentes Jinja2/HTML
+│   ├── static/        # CSS, JavaScript, imagens e bibliotecas locais
+│   ├── utils/         # Validadores e utilitários
+│   ├── config.py      # Configurações Flask
+│   ├── extensions.py  # Extensões compartilhadas
+│   └── __init__.py    # Factory da aplicação Flask
+├── docs/              # Documentação técnica do projeto
+├── migrations/        # Migrações do banco de dados
+├── package/           # Arquivos relacionados ao empacotamento
+├── installer/         # Arquivos do instalador
+├── main.py            # Ponto de entrada
+├── requirements.txt   # Dependências Python
+└── TASKS.md           # Lista de tarefas do projeto
 ```
 
-┌──────────────┐         ┌──────────────┐
-│   Visitor     │         │    Visit      │
-├──────────────┤         ├──────────────┤
-│ id           │◄───┐    │ id            │
-│ name         │    │    │ visitor_id ───┘  (FK)
-│ cpf          │    │    │ check_in       │
-│ mom_name     │    │    │ check_out      │
-│ father_name  │    │    │ destination    │
-│ phone        │         └──────────────┘
-│ email        │
-│ empresa      │
-│ photo_rel_path│
-└──────────────┘
+A separação entre pastas é uma descrição da organização atual, não uma afirmação de que todas as responsabilidades estejam completamente isoladas. Consulte [a documentação técnica](docs/README.md) para ver o levantamento da arquitetura e suas pendências.
 
-```
+## Executar em ambiente de desenvolvimento
 
-## 🖨️ Impressão
-O relatório imprimível (print_day.html) é um documento HTML standalone projetado para gerar PDFs limpos em A4. Compatível com:
+Os comandos abaixo são um ponto de partida para um ambiente Python local. Dependências específicas do Windows podem ser necessárias para recursos de janela nativa.
 
+1. Clone o repositório e entre na pasta:
 
-window.print() — impressão direta pelo navegador
-WeasyPrint — geração de PDF no backend (Python)
+   ```powershell
+   git clone https://github.com/NathanCruzOficial/SISPORT.git
+   cd SISPORT
+   ```
 
-## 🏛️ Contexto Institucional
-O sistema foi desenvolvido para uso em Organizações Militares do Exército Brasileiro, especificamente:
+2. Crie e ative um ambiente virtual:
 
-Ministério da Defesa
-└── Exército Brasileiro
-    └── Grupamento de Unidades Escola / 9ª Brigada de Infantaria Motorizada
+   ```powershell
+   py -m venv .venv
+   .\.venv\Scripts\Activate.ps1
+   ```
 
-Campo,Autoridade
-Responsável,"Nome, Posto/Grad, Assinatura"
-Visto Of Dia,Oficial de Dia
-Visto Adj Of Dia,Adjunto do Oficial de Dia
-Visto Cmt Gda,Comandante da Guarda
+3. Instale as dependências:
 
-## 📝 Licença
-Uso interno — Exército Brasileiro.
+   ```powershell
+   python -m pip install -r requirements.txt
+   ```
 
-Pronto, Danilo! O README foi construído 100% a partir das informações extraídas dos 3 templates que você me enviou. Ele cobre:
+4. Inicie o sistema:
 
-- **Visão geral** do sistema
-- **Stack** tecnológica
-- **Estrutura** de diretórios
-- **Documentação detalhada** de cada template
-- **Mapa de rotas** (inferido dos `url_for`)
-- **Assets JS** e seus data attributes
-- **Modelo de dados** (inferido das variáveis de contexto)
-- **Contexto institucional** militar
+   ```powershell
+   python main.py
+   ```
 
-Se quiser que eu ajuste algo ou adicione mais seções (como instalação, deploy, etc.), é só falar! 🚀
+   Para solicitar a execução no navegador, use:
+
+   ```powershell
+   python main.py --browser
+   ```
+
+> Antes de usar o sistema com dados reais, confira as configurações locais, as rotinas de backup e as medidas de proteção de dados. Não publique bancos de dados, fotos, logs ou informações pessoais em commits, issues ou pull requests.
+
+## Documentação
+
+Consulte o [índice da documentação](docs/README.md).
+
+- [Arquitetura atual](docs/arquitetura_atual.md) — inventário inicial das camadas e responsabilidades observadas no código.
+- [Tarefas do projeto](TASKS.md) — acompanhamento de atividades existentes.
+
+## Escopo desta documentação
+
+A documentação é construída gradualmente com base no código versionado. Primeiro registramos o comportamento e a estrutura existentes; propostas de refatoração serão documentadas separadamente, sem serem confundidas com o funcionamento atual.
